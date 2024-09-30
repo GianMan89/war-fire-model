@@ -1,5 +1,6 @@
 # large dbf files in data folder
-input_data/raw/*.dbf
+input_data/raw/fires/2000-2022/*.dbf
+input_data/raw/fires/recent/*.dbf
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
