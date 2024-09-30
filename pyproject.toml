@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "war-fire-model"
+version = "0.1.0"
+description = "Extenstion of the Economist's War Fire Model."
+authors = ["Gianluca Manca <gianluca.manca89@gmail.com>"]
+license = "MIT-License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
