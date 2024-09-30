@@ -1,3 +1,6 @@
+# large dbf files in data folder
+input_data/raw/*.dbf
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
