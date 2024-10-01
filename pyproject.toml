@@ -12,6 +12,7 @@ geopandas = "^1.0.1"
 ipykernel = "^6.29.5"
 matplotlib = "^3.9.2"
 rasterio = "^1.4.0"
+scikit-learn = "^1.5.2"
 
 
 [build-system]
