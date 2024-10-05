@@ -6,6 +6,7 @@ saved_models/rf_clf.pkl
 input_data/raw/land_use/*_00*.csv
 input_data/processed/*.csv
 input_data/processed/land_use/*.csv
+old_nbs/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
