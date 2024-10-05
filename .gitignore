@@ -4,9 +4,8 @@ input_data/raw/fires/recent/*.dbf
 input_data/raw/land_use/*.tif
 saved_models/rf_clf.pkl
 input_data/raw/land_use/*_00*.csv
-input_data/processed/aggregated_data_*
-input_data/processed/land_use_*
-input_data/processed/fire_data*
+input_data/processed/*.csv
+input_data/processed/land_use/*.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
