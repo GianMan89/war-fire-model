@@ -1,0 +1,18 @@
+Suggested Order:
+    2. Nearest Neighbor Analysis
+    3. XAI (Local and Global Explainability)
+    4. RAG and LLM Enhancement
+    5. Active Learning and Feedback Component
+    6. Code Refactoring and Structuring
+    7. Architecture Design
+    8. Database Integration
+    9. API Calls for External Data
+    10. Large File Handling
+    11. Dashboard and Plots
+    12. Kubernetes/Docker and Microservices Architecture
+    13. Web Service Development
+    14. Documentation and Clean Coding
+
+
+Done Pile:
+    1. Decay Function Implementation
