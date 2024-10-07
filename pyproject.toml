@@ -23,6 +23,7 @@ tensorflow-cpu = "^2.17.0"
 keras = "^3.5.0"
 torch = "^2.4.1"
 quantile-forest = "^1.3.11"
+lime = "^0.2.0.1"
 
 
 [build-system]
