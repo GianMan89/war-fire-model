@@ -1,0 +1,1 @@
+Data Source: https://github.com/TheEconomist/the-economist-war-fire-model/blob/master/source-data/worldpop/ukr_pd_2020_1km_UNadj_ASCII_XYZ.csv
