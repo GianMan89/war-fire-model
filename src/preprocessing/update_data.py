@@ -90,6 +90,7 @@ class DataUpdater:
         
         # Select only LATITUDE,LONGITUDE,ACQ_DATE columns
         for i in range(len(dfs)):
+            dfs[i].columns = map(str.upper, dfs[i].columns)
             dfs[i] = dfs[i][['LATITUDE', 'LONGITUDE', 'ACQ_DATE']]
 
         # Concatenate the dataframes
