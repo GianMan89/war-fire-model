@@ -20,7 +20,13 @@ from src.preprocessing.load_data import DataLoader
 class FeatureEngineering:
     def __init__(self, fire_data, static_data, weather_data, start_date, end_date):
         """
-        
+        Initializes the feature engineering process with the provided datasets and date range.
+        Args:
+            fire_data (DataFrame): DataFrame containing fire-related data.
+            static_data (DataFrame): DataFrame containing static data.
+            weather_data (DataFrame): DataFrame containing weather-related data.
+            start_date (str): The start date for the data in 'YYYY-MM-DD' format.
+            end_date (str): The end date for the data in 'YYYY-MM-DD' format.
         """
         self.fire_data = fire_data
         self.static_data = static_data
@@ -30,7 +36,17 @@ class FeatureEngineering:
 
     def generate_fire_time_series(self):
         """
-        
+        Generates a time series dataset for fire data within grid cells.
+        This method processes fire data to create a time series for each unique grid cell. 
+        It ensures that the time series is continuous from the start date to the end date, 
+        filling in any missing dates with zero values. The resulting time series data 
+        includes both dynamic and static features for each grid cell.
+        Returns:
+            pd.DataFrame: A concatenated DataFrame containing the time series data for all grid cells.
+                  Each row represents a day within the specified date range for a grid cell.
+                  The DataFrame includes dynamic features (e.g., 'ACQ_DATE', 'DAY_OF_YEAR', 
+                  'FIRE_COUNT_CELL') and static features (all other columns in the original data 
+                  except 'ACQ_DATE', 'DAY_OF_YEAR', and 'FIRE_COUNT_CELL').
         """
         time_series_data = {}
         for cell in self.fire_data['GRID_CELL'].unique():
@@ -52,7 +68,15 @@ class FeatureEngineering:
     
     def transform(self):
         """
-        
+        Transforms the fire data by performing several operations:
+        1. Sorts the fire data by acquisition date ('ACQ_DATE').
+        2. Adds a new column 'FIRE_COUNT_CELL' which counts the number of fires per grid cell per acquisition date.
+        3. Generates a fire time series and updates the fire data.
+        4. Merges the fire data with static data based on latitude and longitude.
+        5. Converts the 'ACQ_DATE' column to datetime.date format.
+        6. Merges the fire data with weather data based on oblast ID and acquisition date.
+        Returns:
+            pd.DataFrame: The transformed fire data.
         """
         self.fire_data.sort_values('ACQ_DATE', inplace=True)
         self.fire_data['FIRE_COUNT_CELL'] = self.fire_data.groupby(['GRID_CELL', 'ACQ_DATE'])['ACQ_DATE'].transform('count')
