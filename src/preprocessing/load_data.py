@@ -13,6 +13,7 @@ sys.path.append(project_root)
 
 from utils.file_utils import get_path
 from config.config import get_parameter
+from utils.data_utils import round_lat_lon
 
 class DataLoader:
     """
@@ -58,8 +59,6 @@ class DataLoader:
         data['ACQ_DATE'] = data['ACQ_DATE'].apply(lambda x: pd.to_datetime(x).date())
         data['DAY_OF_YEAR'] = data['ACQ_DATE'].apply(lambda x: x.timetuple().tm_yday)
         data['FIRE_ID'] = data.index
-        data['GRID_CELL'] = data['LATITUDE'].astype(str) + '_' + data['LONGITUDE'].astype(str)
-        data = data[['FIRE_ID', 'LATITUDE', 'LONGITUDE', 'GRID_CELL', 'ACQ_DATE', 'DAY_OF_YEAR']]
         return data
     
     @staticmethod
@@ -80,6 +79,10 @@ class DataLoader:
         data_inside.reset_index(drop=True, inplace=True)
         data_inside.columns = map(str.upper, data_inside.columns)
         data_inside.drop(columns=['ID'], inplace=True)
+        # Round the latitude and longitude to the nearest .5 or .0
+        data_inside['LATITUDE'], data_inside['LONGITUDE'] = zip(*data_inside.apply(lambda x: round_lat_lon(x['LATITUDE'], x['LONGITUDE']), axis=1))
+        data_inside['GRID_CELL'] = data_inside['LATITUDE'].astype(str) + '_' + data_inside['LONGITUDE'].astype(str)
+        data_inside = data_inside[['FIRE_ID', 'LATITUDE', 'LONGITUDE', 'GRID_CELL', 'ACQ_DATE', 'DAY_OF_YEAR']]
         return data_inside
 
     @staticmethod
