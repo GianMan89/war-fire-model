@@ -6,6 +6,7 @@ config/nasa_firms_api_key.txt
 __pycache__/
 *.py[cod]
 *$py.class
+.cache.sqlite
 
 # C extensions
 *.so
