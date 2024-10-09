@@ -14,6 +14,7 @@ project_root = os.path.abspath(os.path.join(current_path, '../../'))  # Adjust b
 sys.path.append(project_root)
 
 from utils.file_utils import get_path
+from config.config import get_parameter
 
 
 class DataUpdater:
@@ -41,10 +42,10 @@ class DataUpdater:
     """
     
     def __init__(self):
-        self.api_url_1 = get_path("nasa_firms_api_url")
-        self.api_url_2 = get_path("weather_api_url")
-        self.api_key_1 = get_path("nasa_firms_api_key")
-        self.satellites = get_path("satellites")
+        self.api_url_1 = get_parameter("nasa_firms_api_url")
+        self.api_url_2 = get_parameter("weather_api_url")
+        self.api_key_1 = get_parameter("nasa_firms_api_key")
+        self.satellites = get_parameter("satellites")
         self.fire_data_dir = get_path("fire_data_dir")
         self.weather_data_dir = get_path("weather_data_dir")
         self.current_date = pd.to_datetime("today")
@@ -109,7 +110,7 @@ class DataUpdater:
         retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
         openmeteo = omr.Client(session = retry_session)
         # Get the ukr_weather_api_call_data from the paths dictionary
-        ukr_weather_api_call_data = get_path("ukr_weather_api_call_data")
+        ukr_weather_api_call_data = get_parameter("ukr_weather_api_call_data")
 
         # Iterate over the rows in the ukr_weather_api_call_data
         dfs = []

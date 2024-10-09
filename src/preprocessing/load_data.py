@@ -12,6 +12,7 @@ project_root = os.path.abspath(os.path.join(current_path, '../../'))  # Adjust b
 sys.path.append(project_root)
 
 from utils.file_utils import get_path
+from config.config import get_parameter
 
 class DataLoader:
     """
@@ -72,8 +73,8 @@ class DataLoader:
         """
         borders = gpd.read_file(get_path("border_data_dir"))
         data_gdf = gpd.GeoDataFrame(data, geometry=gpd.points_from_xy(data['LONGITUDE'], data['LATITUDE']))
-        data_gdf.set_crs(epsg=4326, inplace=True)
-        borders.set_crs(epsg=4326, inplace=True)
+        data_gdf.set_crs(epsg=get_parameter("border_epsg"), inplace=True)
+        borders.set_crs(epsg=get_parameter("border_epsg"), inplace=True)
         data_inside = gpd.sjoin(data_gdf, borders, how='inner')
         data_inside.drop(columns=['geometry', 'source', 'name', 'index_right'], inplace=True)
         data_inside.reset_index(drop=True, inplace=True)
