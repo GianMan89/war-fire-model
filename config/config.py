@@ -6,6 +6,14 @@ parameters = {
     "nasa_firms_api_url": "https://firms.modaps.eosdis.nasa.gov/api/country/csv",
     "weather_api_url": "https://archive-api.open-meteo.com/v1/archive",
     "satellites": ["VIIRS_NOAA20_NRT", "MODIS_NRT"],
+    "decay_rate": 1.0, 
+    "midpoint": 5, 
+    "cutoff": 10,
+    "quantile": 0.95,
+    "n_components": 0.95,
+    "calibration_confidence": 0.95,
+    "n_estimators": 100,
+    "random_state": 42,
     }
 
 # Load the MAP_KEY from the nasa_firms_api_key.txt file
@@ -31,4 +39,4 @@ def get_parameter(parameter_id):
 
 # Example usage
 if __name__ == "__main__":
-    print(get_parameter("data_dir"))
+    print(get_parameter("n_components"))
