@@ -102,23 +102,27 @@ class FeatureEngineering:
                 - ids_train (Series): The fire IDs and ACQ_DATE of the training data.
                 - ids_calib (Series): The fire IDs and ACQ_DATE of the calibration data
         """
-        X_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'FIRE_ID', 'ACQ_DATE'])
-        X_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'FIRE_ID', 'ACQ_DATE'])
+        X_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID',
+                                                                                                  'FIRE_ID', 'ACQ_DATE', 'GRID_CELL'])
+        X_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID',
+                                                                                                   'FIRE_ID', 'ACQ_DATE', 'GRID_CELL'])
         y_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib]['FIRE_COUNT_CELL']
         y_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib]['FIRE_COUNT_CELL']
-        ids_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib][['FIRE_ID', 'ACQ_DATE']]
-        ids_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib][['FIRE_ID', 'ACQ_DATE']]
+        ids_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib][['FIRE_ID', 'ACQ_DATE', 'GRID_CELL']]
+        ids_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib][['FIRE_ID', 'ACQ_DATE', 'GRID_CELL']]
         return X_train, X_calib, y_train, y_calib, ids_train, ids_calib
     
 
 def main():
     start_date = pd.to_datetime('2020-01-01').date()
     end_date = pd.to_datetime('2022-12-31').date()
+    calib_date = pd.to_datetime('2022-01-01').date()
     static_data = DataLoader.load_static_data(resolution="50km")
     fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date)
     feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
     time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
-    X_train, X_calib, y_train, y_calib, ids_train, ids_calib = feature_engineering.get_train_calibration_split(time_series_data, start_date_calib=pd.to_datetime('2022-01-01').date())
+    X_train, X_calib, y_train, y_calib, ids_train, ids_calib = feature_engineering.get_train_calibration_split(time_series_data, 
+                                                                                                               start_date_calib=calib_date)
     print("Shape of the training data:", X_train.shape)
     print("Shape of the calibration data:", X_calib.shape)
     print("Shape of the training target variable:", y_train.shape)
