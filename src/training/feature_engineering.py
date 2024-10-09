@@ -18,29 +18,26 @@ sys.path.append(project_root)
 from src.preprocessing.load_data import DataLoader
 
 class FeatureEngineering:
-    def __init__(self, fire_data, static_data, weather_data, start_date, end_date):
+    def __init__(self, start_date, end_date):
         """
         Initializes the feature engineering process with the provided datasets and date range.
         Args:
-            fire_data (DataFrame): DataFrame containing fire-related data.
-            static_data (DataFrame): DataFrame containing static data.
-            weather_data (DataFrame): DataFrame containing weather-related data.
             start_date (str): The start date for the data in 'YYYY-MM-DD' format.
             end_date (str): The end date for the data in 'YYYY-MM-DD' format.
         """
-        self.fire_data = fire_data
-        self.static_data = static_data
-        self.weather_data = weather_data
         self.start_date = start_date
         self.end_date = end_date
 
-    def generate_fire_time_series(self):
+    def generate_fire_time_series(self, fire_data):
         """
         Generates a time series dataset for fire data within grid cells.
         This method processes fire data to create a time series for each unique grid cell. 
         It ensures that the time series is continuous from the start date to the end date, 
         filling in any missing dates with zero values. The resulting time series data 
         includes both dynamic and static features for each grid cell.
+        Args:
+            fire_data (pd.DataFrame): The fire data with columns 'ACQ_DATE', 'DAY_OF_YEAR', 
+                'FIRE_COUNT_CELL', and 'GRID_CELL'.
         Returns:
             pd.DataFrame: A concatenated DataFrame containing the time series data for all grid cells.
                   Each row represents a day within the specified date range for a grid cell.
@@ -49,8 +46,8 @@ class FeatureEngineering:
                   except 'ACQ_DATE', 'DAY_OF_YEAR', and 'FIRE_COUNT_CELL').
         """
         time_series_data = {}
-        for cell in self.fire_data['GRID_CELL'].unique():
-            cell_data = self.fire_data[self.fire_data['GRID_CELL'] == cell]
+        for cell in fire_data['GRID_CELL'].unique():
+            cell_data = fire_data[fire_data['GRID_CELL'] == cell]
             static_data = cell_data.iloc[0].drop(['ACQ_DATE', 'DAY_OF_YEAR', 'FIRE_COUNT_CELL'])
             cell_data.set_index('ACQ_DATE', inplace=True)
             cell_data.index = pd.to_datetime(cell_data.index)
@@ -66,7 +63,7 @@ class FeatureEngineering:
         time_series_data = pd.concat(time_series_data.values())
         return time_series_data
     
-    def transform(self):
+    def transform(self, fire_data, static_data, weather_data):
         """
         Transforms the fire data by performing several operations:
         1. Sorts the fire data by acquisition date ('ACQ_DATE').
@@ -75,16 +72,43 @@ class FeatureEngineering:
         4. Merges the fire data with static data based on latitude and longitude.
         5. Converts the 'ACQ_DATE' column to datetime.date format.
         6. Merges the fire data with weather data based on oblast ID and acquisition date.
+        Args:
+            fire_data (pd.DataFrame): The raw fire data.
+            static_data (pd.DataFrame): The static data.
+            weather_data (pd.DataFrame): The weather data.
         Returns:
             pd.DataFrame: The transformed fire data.
         """
-        self.fire_data.sort_values('ACQ_DATE', inplace=True)
-        self.fire_data['FIRE_COUNT_CELL'] = self.fire_data.groupby(['GRID_CELL', 'ACQ_DATE'])['ACQ_DATE'].transform('count')
-        self.fire_data = self.generate_fire_time_series()
-        self.fire_data = pd.merge(self.fire_data, self.static_data, how='left', on=['LATITUDE', 'LONGITUDE'])
-        self.fire_data['ACQ_DATE'] = self.fire_data['ACQ_DATE'].apply(lambda x: pd.to_datetime(x).date())
-        self.fire_data = pd.merge(self.fire_data, self.weather_data, how='left', on=['OBLAST_ID', 'ACQ_DATE'])
-        return self.fire_data
+        fire_data.sort_values('ACQ_DATE', inplace=True)
+        fire_data['FIRE_COUNT_CELL'] = fire_data.groupby(['GRID_CELL', 'ACQ_DATE'])['ACQ_DATE'].transform('count')
+        time_series_data = self.generate_fire_time_series(fire_data)
+        time_series_data = pd.merge(time_series_data, static_data, how='left', on=['LATITUDE', 'LONGITUDE'])
+        time_series_data['ACQ_DATE'] = time_series_data['ACQ_DATE'].apply(lambda x: pd.to_datetime(x).date())
+        time_series_data = pd.merge(time_series_data, weather_data, how='left', on=['OBLAST_ID', 'ACQ_DATE'])
+        return time_series_data
+    
+    def get_train_calibration_split(self, time_series_data, start_date_calib):
+        """
+        Splits the transformed data into training and calibration sets.
+        This method splits the transformed data into training and calibration sets based on the specified date range.
+        The training set includes data from the start date to the day before the start_date_calib date, 
+        while the calibration set includes data from the start_date_calib date to the end date.
+        Returns:
+            tuple: A tuple containing six DataFrames:
+                - X_train (DataFrame): The features of the training data.
+                - X_calib (DataFrame): The features of the calibration data.
+                - y_train (Series): The target variable of the training data.
+                - y_calib (Series): The target variable of the calibration data.
+                - ids_train (Series): The fire IDs and ACQ_DATE of the training data.
+                - ids_calib (Series): The fire IDs and ACQ_DATE of the calibration data
+        """
+        X_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'FIRE_ID', 'ACQ_DATE'])
+        X_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'FIRE_ID', 'ACQ_DATE'])
+        y_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib]['FIRE_COUNT_CELL']
+        y_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib]['FIRE_COUNT_CELL']
+        ids_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib][['FIRE_ID', 'ACQ_DATE']]
+        ids_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib][['FIRE_ID', 'ACQ_DATE']]
+        return X_train, X_calib, y_train, y_calib, ids_train, ids_calib
     
 
 def main():
@@ -92,9 +116,15 @@ def main():
     end_date = pd.to_datetime('2022-12-31').date()
     static_data = DataLoader.load_static_data(resolution="50km")
     fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date)
-    features = FeatureEngineering(fire_data, static_data, weather_data, start_date=start_date, end_date=end_date).transform()
-    print("Shape of the features DataFrame:", features.shape)
-    print(features[['ACQ_DATE', 'FIRE_COUNT_CELL']])
+    feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
+    time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
+    X_train, X_calib, y_train, y_calib, ids_train, ids_calib = feature_engineering.get_train_calibration_split(time_series_data, start_date_calib=pd.to_datetime('2022-01-01').date())
+    print("Shape of the training data:", X_train.shape)
+    print("Shape of the calibration data:", X_calib.shape)
+    print("Shape of the training target variable:", y_train.shape)
+    print("Shape of the calibration target variable:", y_calib.shape)
+    print("Shape of the training IDs:", ids_train.shape)
+    print("Shape of the calibration IDs:", ids_calib.shape)
 
 if __name__ == "__main__":
     main()
