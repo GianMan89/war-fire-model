@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 import lime.lime_tabular
-import matplotlib.pyplot as plt
+import pandas as pd
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -92,7 +92,7 @@ class LimeExplainer:
                                               predict_fn, num_features=num_features)
         return exp
 
-    def save_explanation(self, exp, file_name):
+    def save_explanation_instance(self, exp, file_name):
         """
         Save the explanation as an HTML file.
 
@@ -101,6 +101,35 @@ class LimeExplainer:
         exp : lime.explanation.Explanation
             The explanation object.
         """
-        with open(file_name, 'w') as f:
-            f.write(exp.as_html())
-        plt.show()
+        exp.save_to_file(file_name, labels=None, predict_proba=False, 
+                         show_predicted_value=True)
+        
+    def explain_data(self, data, predict_fn, num_features, file_path=None):
+        """
+        Explains a dataset using the LIME explainer.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The data to explain.
+        predict_fn : function
+            The prediction function of the model.
+        num_features : int
+            The number of features to include in the explanation.
+        file_path : str, optional
+            The path to save the explanation as a csv file (default is None).
+        
+        Returns
+        -------
+        explanations_df : pd.DataFrame
+            The explanations for the data.
+        """   
+        explanations = []
+        for i in range(data.shape[0]):
+            exp = self.explain_instance(data.iloc[i], predict_fn, num_features)
+            explanations.append(exp.as_list())
+            columns = [f'Explanation_{i}' for i in range(num_features)]
+            explanations_df = pd.DataFrame(explanations, columns=columns)
+        if file_path:
+            explanations_df.to_csv(file_path, index=False)
+        return explanations_df
