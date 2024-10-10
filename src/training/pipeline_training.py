@@ -61,7 +61,7 @@ class FirePredictionPipeline:
         Gets the nearest neighbors for the input data using the One Nearest Neighbor model.
     get_explanation(instance, num_features=16)
         Gets an explanation for a single instance using the LIME explainer.
-    save_explanation(exp, file_name="explanation")
+    save_explanation_instance(exp, file_name="explanation")
         Saves the explanation as an HTML file.
     save()
         Saves the pipeline to disk in parts.
@@ -255,10 +255,12 @@ class FirePredictionPipeline:
         exp : lime.explanation.Explanation
             The explanation object.
         """
-
-        return self.explainer.explain_instance(instance, self.pipeline, num_features)
+        predict_fn = lambda x: self.pipeline.named_steps['regressor'].predict(
+            self.pipeline.named_steps['pca'].transform(
+                self.pipeline.named_steps['scaler'].transform(x)), quantiles=[0.95])
+        return self.explainer.explain_instance(instance, predict_fn, num_features)
     
-    def save_explanation(self, exp, file_name="explanation"):
+    def save_explanation_instance(self, exp, file_name="explanation"):
         """
         Save the explanation as an HTML file.
 
@@ -273,7 +275,31 @@ class FirePredictionPipeline:
         None
         """
 
-        self.explainer.save_explanation(exp, f"{file_name}.html")
+        self.explainer.save_explanation_instance(exp, f"{file_name}.html")
+
+    def explain_data(self, data, num_features=16, file_path=None):
+        """
+        Explain a dataset using the LIME explainer.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            The data to explain.
+        num_features : int
+            The number of features to include in the explanation.
+        file_path : str, optional
+            The path to save the explanation as a csv file (default is None).
+        Returns
+        -------
+        explanations_df : pd.DataFrame
+            The explanations for the data.
+        """
+
+        predict_fn = lambda x: self.pipeline.named_steps['regressor'].predict(
+            self.pipeline.named_steps['pca'].transform(
+                self.pipeline.named_steps['scaler'].transform(x)), quantiles=[0.95])
+        
+        return self.explainer.explain_data(data, predict_fn, num_features, file_path)
 
     @staticmethod
     def save_predictions_to_csv(fire_data, y_pred_decay, y_scores_decay, y_pred, y_scores, ids_test, file_path):
@@ -477,8 +503,13 @@ def main():
     idx_instance = 2000
     instance = X_test.iloc[idx_instance]
     exp = pipeline.get_explanation(instance.values)
-    pipeline.save_explanation(exp, f"results/plots/explanation_{idx_instance}")
-    print("Explanation generated successfully.")
+    pipeline.save_explanation_instance(exp, f"results/plots/explanation_{idx_instance}")
+    print("Explanation instance generated successfully.")
+
+    # Explain the test data
+    X_test_subset = X_test.iloc[:10000].reset_index(drop=True)
+    explanations_df = pipeline.explain_data(X_test_subset, file_path="results/test_explanations.csv")
+    print("Explanations generated successfully.")
 
 if __name__ == "__main__":
     main()
