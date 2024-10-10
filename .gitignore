@@ -1,5 +1,4 @@
-# large files in data folder
-saved_models/pipeline.pkl
+# api keys
 config/nasa_firms_api_key.txt
 
 # Byte-compiled / optimized / DLL files
