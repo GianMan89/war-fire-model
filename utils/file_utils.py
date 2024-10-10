@@ -1,6 +1,6 @@
 import os
 import tempfile
-import joblib
+import dill # joblib cannot serialize lambda functions
 from split_file_writer import SplitFileWriter
 from split_file_reader import SplitFileReader
 from io import BytesIO
@@ -64,7 +64,7 @@ def save_large_model(model, base_filename, part_size=100):
     """
     # Create a temporary file to store the model
     with tempfile.NamedTemporaryFile(delete=False) as temp_model_file:
-        joblib.dump(model, temp_model_file.name)
+        dill.dump(model, temp_model_file)
         temp_model_path = temp_model_file.name
     
     # Split the saved model file into parts
@@ -119,7 +119,7 @@ def load_large_model(base_filename, num_parts=None):
     with SplitFileReader(filepaths) as sfr:
         # Load the model from the split parts, which are read as a binary-like file
         model_bytes = sfr.read()  # Read all parts into a single bytes object
-        model = joblib.load(BytesIO(model_bytes))
+        model = dill.load(BytesIO(model_bytes))
 
     return model
 
