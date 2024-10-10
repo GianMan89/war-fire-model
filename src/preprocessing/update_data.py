@@ -19,29 +19,58 @@ from config.config import get_parameter
 
 class DataUpdater:
     """
-    A class to handle the updating of fire and weather data from various APIs.
-    Attributes:
-        api_url_1 (str): The URL for the NASA FIRMS API.
-        api_url_2 (str): The URL for the weather API.
-        api_key_1 (str): The API key for the NASA FIRMS API.
-        satellites (list): A list of satellite names to fetch data from.
-        fire_data_dir (str): The directory where fire data CSV files are stored.
-        weather_data_dir (str): The directory where weather data CSV files are stored.
-        current_date (datetime): The current date for data fetching and updating.
-    Methods:
-        fetch_fire_data(newest_date, current_date, country_code="UKR"):
-            Fetches fire data from the NASA FIRMS API for a specified country and date range.
-        fetch_weather_data():
-            Fetches weather data from the Open-Meteo API for specified locations and dates.
-        get_newest_date_from_csv(folder_path):
-            Retrieves the newest date from CSV files in the specified folder.
-        save_data_to_csv(data, folder_path):
-            Saves the new data to CSV files, separated by year.
-        update_data():
-            Updates the fire and weather data by fetching the latest data and saving it to CSV files.
+    The class fetches the latest data from the NASA FIRMS and Open-Meteo APIs,
+    and saves it to CSV files.
+
+    Attributes
+    ----------
+    api_url_1 : str
+        The URL for the NASA FIRMS API.
+    api_url_2 : str
+        The URL for the weather API.
+    api_key_1 : str
+        The API key for the NASA FIRMS API.
+    satellites : list
+        A list of satellite names to fetch data from.
+    fire_data_dir : str
+        The directory where fire data CSV files are stored.
+    weather_data_dir : str
+        The directory where weather data CSV files are stored.
+    current_date : datetime
+        The current date for data fetching and updating.
+    Methods
+    -------
+    fetch_fire_data(newest_date, country_code="UKR")
+    fetch_weather_data(newest_date)
+    get_newest_date_from_csv(folder_path)
+    save_data_to_csv(data, folder_path)
+    update_data()
     """
     
     def __init__(self):
+        """
+        Initializes the data update process by setting up necessary parameters and paths.
+
+        Attributes
+        ----------
+        api_url_1 : str
+            The URL for the NASA FIRMS API.
+        api_url_2 : str
+            The URL for the weather API.
+        api_key_1 : str
+            The API key for accessing the NASA FIRMS API.
+        satellites : list
+            A list of satellites to be used for data retrieval.
+        fire_data_dir : str
+            The directory path where fire data is stored.
+        weather_data_dir : str
+            The directory path where weather data is stored.
+        current_date : pandas.Timestamp
+            The current date and time.
+        country_code : str
+            The country code for the region of interest, default is "UKR".
+        """
+
         self.api_url_1 = get_parameter("nasa_firms_api_url")
         self.api_url_2 = get_parameter("weather_api_url")
         self.api_key_1 = get_parameter("nasa_firms_api_key")
@@ -58,12 +87,17 @@ class DataUpdater:
         constructs the API URL for each satellite, and fetches the fire data for the 
         specified country and date range. The data from all satellites is then concatenated 
         into a single DataFrame.
-        Args:
-            newest_date (datetime): The most recent date for which data is available.
-            country_code (str, optional): The country code for which the data is to be fetched. 
-                                          Defaults to "UKR".
-        Returns:
-            pd.DataFrame: A DataFrame containing the concatenated fire data from all satellites.
+        
+        Parameters
+        ----------
+        newest_date : datetime
+            The most recent date for which data is available.
+        country_code : str, optional
+            The country code for which the data is to be fetched. Defaults to "UKR".
+        Returns
+        -------
+        pd.DataFrame
+            A DataFrame containing the concatenated fire data from all satellites.
         """
         # Get the distance between the newest date and the current date
         start_dates = [None]
@@ -98,14 +132,26 @@ class DataUpdater:
 
     def fetch_weather_data(self, newest_date):
         """
-        Fetches weather data from the Open-Meteo API for specified locations and dates.
-        Args:
-            newest_date (datetime): The most recent date for which data is available.
-        Returns:
-            DataFrame: A pandas DataFrame containing the merged hourly and daily weather data for each location.
+        Fetch weather data from the Open-Meteo API for specified locations and dates.
+
+        Parameters
+        ----------
+        newest_date : datetime
+            The most recent date for which data is available.
+        Returns
+        -------
+        DataFrame
+            A pandas DataFrame containing the merged hourly and daily weather data for each location. The DataFrame includes the following columns:
+            - "OBLAST_ID": Identifier for the oblast (region).
+            - "ACQ_DATE": Date of data acquisition.
+            - "TEMPERATURE_2M_MAX (°C)": Maximum temperature at 2 meters above ground level.
+            - "TEMPERATURE_2M_MIN (°C)": Minimum temperature at 2 meters above ground level.
+            - "TEMPERATURE_2M_MEAN (°C)": Mean temperature at 2 meters above ground level.
+            - "RAIN_SUM (MM)": Total rainfall.
+            - "SNOWFALL_SUM (CM)": Total snowfall.
+            - "WIND_DIRECTION_10M_DOMINANT (°)": Dominant wind direction at 10 meters above ground level.
+            - "CLOUD_COVER (%)": Cloud cover percentage.
         """
-        
-        
         # Setup the Open-Meteo API client with cache and retry on error
         cache_session = requests_cache.CachedSession('.cache', expire_after = -1)
         retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
@@ -195,11 +241,15 @@ class DataUpdater:
         Retrieves the newest date from CSV files in the specified folder.
         This method iterates through all CSV files in the given folder, reads the 'ACQ_DATE' column,
         and returns the most recent date found across all files.
-        Args:
-            folder_path (str): The path to the folder containing the CSV files.
-        Returns:
-            datetime: The most recent date found in the 'ACQ_DATE' column of the CSV files.
-                      Returns None if no valid dates are found.
+        
+        Parameters
+        ----------
+        folder_path : str
+            The path to the folder containing the CSV files.
+        Returns
+        -------
+        datetime or None
+            The most recent date found in the 'ACQ_DATE' column of the CSV files.
         """
         newest_date = None
         
@@ -222,12 +272,15 @@ class DataUpdater:
         concatenates the new data with the existing data. If not, creates a new file for that year.
         Ensures that the new data is sorted by day and has capitalized column names.
         
-        Args:
-            data (pd.DataFrame): The new data to be saved.
-            folder_path (str): The path to the folder where the CSV files will be saved.
-        
-        Returns:
-            None
+        Parameters
+        ----------
+        data : pd.DataFrame
+            The new data to be saved.
+        folder_path : str
+            The path to the folder where the CSV files will be saved.
+        Returns
+        -------
+        None
         """
         # Ensure column names are capitalized
         data.columns = [col.upper() for col in data.columns]
@@ -279,16 +332,18 @@ class DataUpdater:
     def update_data(self):
         """
         Updates the fire and weather data by fetching the latest data and saving it to CSV files.
+
         This method performs the following steps:
         1. Checks the newest date in the existing fire data CSV files.
         2. If the fire data is not up to date, fetches the latest fire data and saves it to CSV.
         3. Checks the newest date in the existing weather data CSV files.
         4. If the weather data is not up to date, fetches the latest weather data and saves it to CSV.
 
-        Returns:
-            self: The instance of the class.
+        Returns
+        -------
+        self : DataUpdater
+            The instance of the class.
         """
-        
         # Update the fire data
         newest_date_fire = self.get_newest_date_from_csv(self.fire_data_dir)
         print("Newest date for fire data:", newest_date_fire)

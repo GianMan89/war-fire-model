@@ -18,29 +18,32 @@ from utils.data_utils import round_lat_lon
 class DataLoader:
     """
     DataLoader is a utility class for loading and preprocessing fire and weather data.
-    Methods:
-        filter_date(data, start_date, end_date):
-            Filters the data based on a date range.
-        preprocess_fire_data(data):
-            Preprocesses the fire data by dropping unnecessary columns and generating additional features.
-        filter_border(data):
-            Filters the data based on administrative borders.
-        load_dynamic_data(start_date, end_date):
-            Loads and processes dynamic fire and weather data within a specified date range.
-        load_static_data(resolution="50km"):
-            Loads and merges static data from multiple directories based on the specified resolution.
-    """
 
+    Methods
+    -------
+    filter_date(data, start_date, end_date)
+    preprocess_fire_data(data)
+    filter_border(data)
+    load_dynamic_data(start_date, end_date)
+    load_static_data(resolution="50km")
+    """
     @staticmethod
     def filter_date(data, start_date, end_date):
         """
         Filters the data based on a date range.
-        Args:
-            data (DataFrame): Fire data.
-            start_date (datetime.date): Start date for filtering.
-            end_date (datetime.date): End date for filtering.
-        Returns:
-            DataFrame: Filtered fire data.
+
+        Parameters
+        ----------
+        data : DataFrame
+            Fire data.
+        start_date : datetime.date
+            Start date for filtering.
+        end_date : datetime.date
+            End date for filtering.
+        Returns
+        -------
+        DataFrame
+            Filtered fire data.
         """
         data['ACQ_DATE'] = pd.to_datetime(data['ACQ_DATE']).dt.date
         filtered_data = data[(data['ACQ_DATE'] >= start_date) & (data['ACQ_DATE'] <= end_date)]
@@ -51,10 +54,15 @@ class DataLoader:
     def preprocess_fire_data(data):
         """
         Preprocesses the fire data by dropping unnecessary columns and generating additional features.
-        Args:
-            data (DataFrame): Raw fire data.
-        Returns:
-            DataFrame: Preprocessed fire data.
+
+        Parameters
+        ----------
+        data : DataFrame
+            Raw fire data.
+        Returns
+        -------
+        DataFrame
+            Preprocessed fire data.
         """
         data['ACQ_DATE'] = data['ACQ_DATE'].apply(lambda x: pd.to_datetime(x).date())
         data['DAY_OF_YEAR'] = data['ACQ_DATE'].apply(lambda x: x.timetuple().tm_yday)
@@ -65,10 +73,15 @@ class DataLoader:
     def filter_border(data):
         """
         Filters the data based on administrative borders.
-        Args:
-            data (DataFrame): Fire data.
-        Returns:
-            DataFrame: Filtered fire data.
+
+        Parameters
+        ----------
+        data : DataFrame
+            Fire data.
+        Returns
+        -------
+        DataFrame
+            Filtered fire data.
         """
         borders = gpd.read_file(get_path("border_data_dir"))
         data_gdf = gpd.GeoDataFrame(data, geometry=gpd.points_from_xy(data['LONGITUDE'], data['LATITUDE']))
@@ -87,16 +100,23 @@ class DataLoader:
 
     @staticmethod
     def load_dynamic_data(start_date, end_date):
-        """Loads and processes dynamic fire and weather data within a specified date range.
+        """
+        Loads and processes dynamic fire and weather data within a specified date range.
         This function reads CSV files from specified directories, filters them by the given date range,
         and returns concatenated and deduplicated dataframes for fire and weather data.
-        Args:
-            start_date (datetime): The start date for filtering the data.
-            end_date (datetime): The end date for filtering the data.
-        Returns:
-            tuple: A tuple containing two pandas DataFrames:
-                - fire_data (DataFrame): The concatenated and deduplicated fire data within the date range.
-                - weather_data (DataFrame): The concatenated and deduplicated weather data within the date range."""
+
+        Parameters
+        ----------
+        start_date : datetime
+            The start date for filtering the data.
+        end_date : datetime
+            The end date for filtering the data.
+        Returns
+        -------
+        tuple
+            A tuple containing two pandas DataFrames:
+            - weather_data (DataFrame): The concatenated and deduplicated weather data within the date range.
+        """
         fire_data, weather_data = [], []
         folders = [get_path("weather_data_dir"), get_path("fire_data_dir")]
         for folder_path in folders:
@@ -127,10 +147,15 @@ class DataLoader:
         Loads and merges static data from multiple directories based on the specified resolution.
         This function reads CSV files from predefined directories, filters them by the given resolution,
         and merges them into a single DataFrame. The merging is done on the 'LONGITUDE' and 'LATITUDE' columns.
-        Args:
-            resolution (str): The resolution of the data files to be loaded. Default is "50km".
-        Returns:
-            pandas.DataFrame: A DataFrame containing the merged data from all the relevant CSV files.
+
+        Parameters
+        ----------
+        resolution : str, optional
+            The resolution of the data files to be loaded. Default is "50km".
+        Returns
+        -------
+        DataFrame
+            A DataFrame containing the merged data from all the relevant CSV files.
         """
         dataframes = []
         folders = [get_path("oblasts_data_dir"), get_path("land_use_data_dir"), get_path("pop_density_data_dir")]
