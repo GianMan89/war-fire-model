@@ -1,5 +1,9 @@
-import joblib
 import os
+import tempfile
+import joblib
+from split_file_writer import SplitFileWriter
+from split_file_reader import SplitFileReader
+from io import BytesIO
 
 # Define the paths
 paths = {
@@ -36,76 +40,82 @@ def get_path(path_id):
         raise KeyError(f"Path identifier {path_id} does not exist.")
     return paths[path_id]
 
-
-def save_large_model(model, base_filename, chunk_size=100):
+def save_large_model(model, base_filename, part_size=100):
     """
-    Saves a large model by splitting it into smaller chunks.
-
+    Save a large model by splitting it into smaller parts.
+    This function saves a large model by first dumping it into a temporary file
+    and then splitting this file into smaller parts of specified size. The parts
+    are saved with filenames based on the provided base filename.
     Parameters
     ----------
     model : object
-        Trained model to be saved.
+        The model to be saved. This can be any object that is serializable by joblib.
     base_filename : str
-        Base name for the saved files.
-    chunk_size : int, optional, default=100
-        Maximum chunk size in MB.
+        The base filename for the saved parts. Each part will have this base filename
+        followed by a part number.
+    part_size : int, optional, default=100
+        The maximum size of each part in megabytes (MB). The model will be split into
+        parts of this size.
     Returns
     -------
     int
         Number of parts the model was split into.
     """
-    # Serialize the model to bytes
-    model_bytes = joblib.dump(model, None)
+    # Create a temporary file to store the model
+    with tempfile.NamedTemporaryFile(delete=False) as temp_model_file:
+        joblib.dump(model, temp_model_file.name)
+        temp_model_path = temp_model_file.name
     
-    # Split bytes into smaller parts
-    total_size = len(model_bytes[0])
+    # Split the saved model file into parts
+    part_size_bytes = part_size * 1024 * 1024  # Convert MB to bytes
     part_number = 0
-    start = 0
-    chunk_size_bytes = chunk_size * 1024 * 1024  # Convert MB to Bytes
-
-    while start < total_size:
-        end = start + chunk_size_bytes
-        chunk = model_bytes[0][start:end]
-        chunk_filename = f"{base_filename}_part_{part_number}.pkl"
-        
-        # Save the chunk
-        with open(chunk_filename, 'wb') as file:
-            file.write(chunk)
-        
-        start = end
-        part_number += 1
-
-    print(f"Model saved in {part_number} parts, each <= {chunk_size} MB.")
+    with open(temp_model_path, 'rb') as infile, SplitFileWriter(f"{base_filename}_part.", part_size_bytes) as sfw:
+        for chunk in iter(lambda: infile.read(part_size_bytes), b''):
+            sfw.write(chunk)
+            part_number += 1
+    
+    # Remove the temporary file
+    os.remove(temp_model_path)
+    print(f"Model saved in {part_number} parts, each <= {part_size} MB.")
     return part_number
 
-def load_large_model(base_filename, total_parts):
+def load_large_model(base_filename, num_parts):
     """
-    Load a large model that was split into smaller chunks.
-
+    Load a large model that has been split into multiple parts.
     Parameters
     ----------
     base_filename : str
-        Base name for the saved files.
-    total_parts : int
-        Number of parts the model was split into.
+        The base filename of the split model parts. Each part file is expected
+        to follow the naming convention `{base_filename}_part.XXX` where `XXX`
+        is a zero-padded part number.
+    num_parts : int
+        The number of parts the model has been split into.
     Returns
     -------
     model : object
+        The loaded model object.
+    Notes
+    -----
+    This function uses `SplitFileReader` to read the split parts as a binary-like
+    file and then loads the model using `joblib.load`.
+    Examples
+    --------
+    >>> model = load_large_model('model_checkpoint', 5)
     """
-    model_bytes = b""
+    # Define the list of split part files
+    filepaths = [f"{base_filename}_part.{i:03d}" for i in range(num_parts)]
     
-    for part_number in range(total_parts):
-        chunk_filename = f"{base_filename}_part_{part_number}.pkl"
-        with open(chunk_filename, 'rb') as file:
-            model_bytes += file.read()
+    # Use SplitFileReader to read the model parts as binary
+    with SplitFileReader(filepaths) as sfr:
+        # Load the model from the split parts, which are read as a binary-like file
+        model_bytes = sfr.read()  # Read all parts into a single bytes object
+        model = joblib.load(BytesIO(model_bytes))
 
-    # Deserialize bytes into the model
-    model = joblib.load(model_bytes)
     return model
 
 
-# Example usage
 if __name__ == "__main__":
+    # Example usage
     print(get_path("data_dir"))
-    # save_large_model(trained_model, "my_model", chunk_size=100)
-    # model = load_large_model("my_model", total_parts=14)
+    # num_parts = save_large_model(trained_model, "my_model", part_size=100)
+    # loaded_model = load_large_model("my_model", num_parts=num_parts)
