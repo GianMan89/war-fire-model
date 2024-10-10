@@ -1,8 +1,3 @@
-# TODO what goes in here?
-# TODO prepare everything for the input to the model
-# TODO fire count needs to be calculated
-# TODO Time series data needs to be generated
-
 import os
 import pandas as pd
 import sys
@@ -59,7 +54,7 @@ class FeatureEngineering:
         """
         time_series_data = {}
         for cell in fire_data['GRID_CELL'].unique():
-            cell_data = fire_data[fire_data['GRID_CELL'] == cell]
+            cell_data = fire_data[fire_data['GRID_CELL'] == cell].drop(columns=['FIRE_ID'])
             static_data = cell_data.iloc[0].drop(['ACQ_DATE', 'DAY_OF_YEAR', 'FIRE_COUNT_CELL'])
             cell_data.set_index('ACQ_DATE', inplace=True)
             cell_data.index = pd.to_datetime(cell_data.index)
@@ -139,14 +134,48 @@ class FeatureEngineering:
             The fire IDs and ACQ_DATE of the calibration data.
         """
         X_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID',
-                                                                                                  'FIRE_ID', 'ACQ_DATE', 'GRID_CELL'])
+                                                                                                  'ACQ_DATE', 'GRID_CELL']).reset_index(drop=True)
         X_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID',
-                                                                                                   'FIRE_ID', 'ACQ_DATE', 'GRID_CELL'])
-        y_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib]['FIRE_COUNT_CELL']
-        y_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib]['FIRE_COUNT_CELL']
-        ids_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib][['FIRE_ID', 'ACQ_DATE', 'GRID_CELL']]
-        ids_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib][['FIRE_ID', 'ACQ_DATE', 'GRID_CELL']]
+                                                                                                   'ACQ_DATE', 'GRID_CELL']).reset_index(drop=True)
+        y_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib]['FIRE_COUNT_CELL'].reset_index(drop=True)
+        y_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib]['FIRE_COUNT_CELL'].reset_index(drop=True)
+        # Get the fire IDs and acquisition dates for the training and calibration sets but only for those dates
+        ids_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib][['ACQ_DATE', 'GRID_CELL']].reset_index(drop=True)
+        ids_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib][['ACQ_DATE', 'GRID_CELL']].reset_index(drop=True)
         return X_train, X_calib, y_train, y_calib, ids_train, ids_calib
+
+    def get_test_data(self, time_series_data):
+        """
+        Splits the transformed data into training and calibration sets.
+        This method splits the transformed data into training and calibration sets based on the specified date range.
+        The training set includes data from the start date to the day before the start_date_calib date, 
+        while the calibration set includes data from the start_date_calib date to the end date.
+
+        Parameters
+        ----------
+        time_series_data : DataFrame
+            The input time series data containing features and target variables.
+        start_date_calib : datetime
+            The start date for the calibration set.
+        Returns
+        -------
+        X_train : DataFrame
+            The features of the training data.
+        X_calib : DataFrame
+            The features of the calibration data.
+        y_train : Series
+            The target variable of the training data.
+        y_calib : Series
+            The target variable of the calibration data.
+        ids_train : DataFrame
+            The fire IDs and ACQ_DATE of the training data.
+        ids_calib : DataFrame
+            The fire IDs and ACQ_DATE of the calibration data.
+        """
+        X_test = time_series_data.drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID', 'ACQ_DATE', 'GRID_CELL']).reset_index(drop=True)
+        y_test = time_series_data['FIRE_COUNT_CELL'].reset_index(drop=True)
+        ids_test = time_series_data[['ACQ_DATE', 'GRID_CELL']].reset_index(drop=True)
+        return X_test, y_test, ids_test
     
 
 def main():
