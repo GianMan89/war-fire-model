@@ -4,6 +4,7 @@ import joblib
 from split_file_writer import SplitFileWriter
 from split_file_reader import SplitFileReader
 from io import BytesIO
+import glob
 
 # Define the paths
 paths = {
@@ -79,7 +80,7 @@ def save_large_model(model, base_filename, part_size=100):
     print(f"Model saved in {part_number} parts, each <= {part_size} MB.")
     return part_number
 
-def load_large_model(base_filename, num_parts):
+def load_large_model(base_filename, num_parts=None):
     """
     Load a large model that has been split into multiple parts.
     Parameters
@@ -89,7 +90,9 @@ def load_large_model(base_filename, num_parts):
         to follow the naming convention `{base_filename}_part.XXX` where `XXX`
         is a zero-padded part number.
     num_parts : int
-        The number of parts the model has been split into.
+        The number of parts the model has been split into. If not provided, the
+        function will attempt to determine this automatically by looking for
+        part files matching the base filename pattern. Default is None.
     Returns
     -------
     model : object
@@ -102,6 +105,13 @@ def load_large_model(base_filename, num_parts):
     --------
     >>> model = load_large_model('model_checkpoint', 5)
     """
+    if num_parts is None:
+        # Check how many parts the model was split into
+        # Get the list of files matching the base filename pattern
+        part_files = glob.glob(f"{base_filename}_part.*")
+        # Count the number of parts
+        num_parts = len(part_files)
+    
     # Define the list of split part files
     filepaths = [f"{base_filename}_part.{i:03d}" for i in range(num_parts)]
     
