@@ -16,9 +16,13 @@ parameters = {
     "random_state": 42,
     }
 
-# Load the MAP_KEY from the nasa_firms_api_key.txt file
-with open('config/nasa_firms_api_key.txt', 'r') as file:
-    MAP_KEY = file.read().strip()
+# Load the MAP_KEY for the NASE FIRMS API
+try:
+    with open('config/nasa_firms_api_key.txt', 'r') as file:
+        MAP_KEY = file.read().strip()
+except FileNotFoundError:
+    print("The file nasa_firms_api_key.txt was not found. Please provide a valid API key.")
+    MAP_KEY = input("Enter your NASA FIRMS API key: ")
 
 # Add the MAP_KEY to the paths dictionary
 parameters["nasa_firms_api_key"] = MAP_KEY
