@@ -50,7 +50,9 @@ def save_large_model(model, base_filename, chunk_size=100):
     chunk_size : int, optional, default=100
         Maximum chunk size in MB.
     Returns
-    None
+    -------
+    int
+        Number of parts the model was split into.
     """
     # Serialize the model to bytes
     model_bytes = joblib.dump(model, None)
@@ -74,6 +76,7 @@ def save_large_model(model, base_filename, chunk_size=100):
         part_number += 1
 
     print(f"Model saved in {part_number} parts, each <= {chunk_size} MB.")
+    return part_number
 
 def load_large_model(base_filename, total_parts):
     """
@@ -104,3 +107,5 @@ def load_large_model(base_filename, total_parts):
 # Example usage
 if __name__ == "__main__":
     print(get_path("data_dir"))
+    # save_large_model(trained_model, "my_model", chunk_size=100)
+    # model = load_large_model("my_model", total_parts=14)
