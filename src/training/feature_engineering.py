@@ -37,15 +37,6 @@ class FeatureEngineering:
     """
     
     def __init__(self, start_date, end_date):
-        """
-        Initialize the feature engineering process.
-        Parameters
-        ----------
-        start_date : str
-            The start date for the data in 'YYYY-MM-DD' format.
-        end_date : str
-            The end date for the data in 'YYYY-MM-DD' format.
-        """
         self.start_date = start_date
         self.end_date = end_date
 

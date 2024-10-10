@@ -48,29 +48,6 @@ class DataUpdater:
     """
     
     def __init__(self):
-        """
-        Initializes the data update process by setting up necessary parameters and paths.
-
-        Attributes
-        ----------
-        api_url_1 : str
-            The URL for the NASA FIRMS API.
-        api_url_2 : str
-            The URL for the weather API.
-        api_key_1 : str
-            The API key for accessing the NASA FIRMS API.
-        satellites : list
-            A list of satellites to be used for data retrieval.
-        fire_data_dir : str
-            The directory path where fire data is stored.
-        weather_data_dir : str
-            The directory path where weather data is stored.
-        current_date : pandas.Timestamp
-            The current date and time.
-        country_code : str
-            The country code for the region of interest, default is "UKR".
-        """
-
         self.api_url_1 = get_parameter("nasa_firms_api_url")
         self.api_url_2 = get_parameter("weather_api_url")
         self.api_key_1 = get_parameter("nasa_firms_api_key")
