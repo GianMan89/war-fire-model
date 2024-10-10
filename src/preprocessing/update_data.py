@@ -115,7 +115,10 @@ class DataUpdater:
                     # Load the last date_diff days of data
                     url = f"{self.api_url_1}/{self.api_key_1}/{satellite}/{self.country_code}/{date_diff}/{start_date.strftime('%Y-%m-%d')}"
                     # Fetch the data
-                    dfs.append(pd.read_csv(url))
+                    try:
+                        dfs.append(pd.read_csv(url))
+                    except Exception as e:
+                        print(f"Error fetching fire data for satellite {satellite} and start date {start_date}: {e}")
             else:
                 # Load the last date_diff days of data
                 url = f"{self.api_url_1}/{self.api_key_1}/{satellite}/{self.country_code}/{date_diff}"
@@ -178,60 +181,65 @@ class DataUpdater:
                           "rain_sum", "snowfall_sum", "wind_direction_10m_dominant"],
                 "timezone": "Europe/Moscow"
             }
-            responses = openmeteo.weather_api(self.api_url_2, params=params, verify=False)
-            # Process first location. Add a for-loop for multiple locations or weather models
-            response = responses[0]
 
-            # Process hourly data. The order of variables needs to be the same as requested.
-            hourly = response.Hourly()
-            hourly_cloud_cover = hourly.Variables(0).ValuesAsNumpy()
-            hourly_data = {"ACQ_DATE": pd.date_range(
-                start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
-                end = pd.to_datetime(hourly.TimeEnd(), unit = "s", utc = True),
-                freq = pd.Timedelta(seconds = hourly.Interval()),
-                inclusive = "left"
-            )}
-            hourly_data["CLOUD_COVER (%)"] = hourly_cloud_cover
-            hourly_dataframe = pd.DataFrame(data = hourly_data)
-            # Resample hourly data to daily means
-            hourly_dataframe.set_index('ACQ_DATE', inplace=True)
-            daily_means = hourly_dataframe.resample('D').mean().reset_index()
-            daily_means['ACQ_DATE'] = daily_means['ACQ_DATE'].dt.date
-            daily_means['OBLAST_ID'] = oblast_id
+            try:
+                responses = openmeteo.weather_api(self.api_url_2, params=params, verify=False)
+                # Process first location. Add a for-loop for multiple locations or weather models
+                response = responses[0]
 
-            # Process daily data. The order of variables needs to be the same as requested.
-            daily = response.Daily()
-            daily_temperature_2m_max = daily.Variables(0).ValuesAsNumpy()
-            daily_temperature_2m_min = daily.Variables(1).ValuesAsNumpy()
-            daily_temperature_2m_mean = daily.Variables(2).ValuesAsNumpy()
-            daily_rain_sum = daily.Variables(3).ValuesAsNumpy()
-            daily_snowfall_sum = daily.Variables(4).ValuesAsNumpy()
-            daily_wind_direction_10m_dominant = daily.Variables(5).ValuesAsNumpy()
-            daily_data = {"ACQ_DATE": pd.date_range(
-                start = pd.to_datetime(daily.Time(), unit = "s", utc = True),
-                end = pd.to_datetime(daily.TimeEnd(), unit = "s", utc = True),
-                freq = pd.Timedelta(seconds = daily.Interval()),
-                inclusive = "left"
-            )}
-            daily_data["ACQ_DATE"] = daily_data["ACQ_DATE"].date
-            daily_data["TEMPERATURE_2M_MAX (°C)"] = daily_temperature_2m_max
-            daily_data["TEMPERATURE_2M_MIN (°C)"] = daily_temperature_2m_min
-            daily_data["TEMPERATURE_2M_MEAN (°C)"] = daily_temperature_2m_mean
-            daily_data["RAIN_SUM (MM)"] = daily_rain_sum
-            daily_data["SNOWFALL_SUM (CM)"] = daily_snowfall_sum
-            daily_data["WIND_DIRECTION_10M_DOMINANT (°)"] = daily_wind_direction_10m_dominant
-            daily_dataframe = pd.DataFrame(data = daily_data)
+                # Process hourly data. The order of variables needs to be the same as requested.
+                hourly = response.Hourly()
+                hourly_cloud_cover = hourly.Variables(0).ValuesAsNumpy()
+                hourly_data = {"ACQ_DATE": pd.date_range(
+                    start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
+                    end = pd.to_datetime(hourly.TimeEnd(), unit = "s", utc = True),
+                    freq = pd.Timedelta(seconds = hourly.Interval()),
+                    inclusive = "left"
+                )}
+                hourly_data["CLOUD_COVER (%)"] = hourly_cloud_cover
+                hourly_dataframe = pd.DataFrame(data = hourly_data)
+                # Resample hourly data to daily means
+                hourly_dataframe.set_index('ACQ_DATE', inplace=True)
+                daily_means = hourly_dataframe.resample('D').mean().reset_index()
+                daily_means['ACQ_DATE'] = daily_means['ACQ_DATE'].dt.date
+                daily_means['OBLAST_ID'] = oblast_id
 
-            # Merge the hourly and daily data
-            dfs.append(daily_dataframe.merge(daily_means, on = 'ACQ_DATE', how = 'left'))
+                # Process daily data. The order of variables needs to be the same as requested.
+                daily = response.Daily()
+                daily_temperature_2m_max = daily.Variables(0).ValuesAsNumpy()
+                daily_temperature_2m_min = daily.Variables(1).ValuesAsNumpy()
+                daily_temperature_2m_mean = daily.Variables(2).ValuesAsNumpy()
+                daily_rain_sum = daily.Variables(3).ValuesAsNumpy()
+                daily_snowfall_sum = daily.Variables(4).ValuesAsNumpy()
+                daily_wind_direction_10m_dominant = daily.Variables(5).ValuesAsNumpy()
+                daily_data = {"ACQ_DATE": pd.date_range(
+                    start = pd.to_datetime(daily.Time(), unit = "s", utc = True),
+                    end = pd.to_datetime(daily.TimeEnd(), unit = "s", utc = True),
+                    freq = pd.Timedelta(seconds = daily.Interval()),
+                    inclusive = "left"
+                )}
+                daily_data["ACQ_DATE"] = daily_data["ACQ_DATE"].date
+                daily_data["TEMPERATURE_2M_MAX (°C)"] = daily_temperature_2m_max
+                daily_data["TEMPERATURE_2M_MIN (°C)"] = daily_temperature_2m_min
+                daily_data["TEMPERATURE_2M_MEAN (°C)"] = daily_temperature_2m_mean
+                daily_data["RAIN_SUM (MM)"] = daily_rain_sum
+                daily_data["SNOWFALL_SUM (CM)"] = daily_snowfall_sum
+                daily_data["WIND_DIRECTION_10M_DOMINANT (°)"] = daily_wind_direction_10m_dominant
+                daily_dataframe = pd.DataFrame(data = daily_data)
 
-            # Reorder the columns
-            ordered_columns = [
-                "OBLAST_ID", "ACQ_DATE", "TEMPERATURE_2M_MAX (°C)", "TEMPERATURE_2M_MIN (°C)",
-                "TEMPERATURE_2M_MEAN (°C)", "RAIN_SUM (MM)", "SNOWFALL_SUM (CM)",
-                "WIND_DIRECTION_10M_DOMINANT (°)", "CLOUD_COVER (%)"
-            ]
-            dfs[-1] = dfs[-1][ordered_columns]
+                # Merge the hourly and daily data
+                dfs.append(daily_dataframe.merge(daily_means, on = 'ACQ_DATE', how = 'left'))
+
+                # Reorder the columns
+                ordered_columns = [
+                    "OBLAST_ID", "ACQ_DATE", "TEMPERATURE_2M_MAX (°C)", "TEMPERATURE_2M_MIN (°C)",
+                    "TEMPERATURE_2M_MEAN (°C)", "RAIN_SUM (MM)", "SNOWFALL_SUM (CM)",
+                    "WIND_DIRECTION_10M_DOMINANT (°)", "CLOUD_COVER (%)"
+                ]
+                dfs[-1] = dfs[-1][ordered_columns]
+
+            except Exception as e:
+                print(f"Error fetching weather data for oblast {oblast_id}: {e}")
 
         return pd.concat(dfs)
     
@@ -351,9 +359,12 @@ class DataUpdater:
             print("Fire data is already up to date.")
         else:
             fire_data = self.fetch_fire_data(newest_date_fire)
-            print("Fetched fire data with shape:", fire_data.shape)
-            self.save_data_to_csv(fire_data, self.fire_data_dir)
-            print("Update fire data date is:", self.get_newest_date_from_csv(self.fire_data_dir))
+            if fire_data.empty:
+                print("No new fire data was fetched.")
+            else:
+                print("Fetched fire data with shape:", fire_data.shape)
+                self.save_data_to_csv(fire_data, self.fire_data_dir)
+                print("Updated fire data date is:", self.get_newest_date_from_csv(self.fire_data_dir))
 
         # Update the weather data
         newest_date_weather = self.get_newest_date_from_csv(self.weather_data_dir)
@@ -362,9 +373,12 @@ class DataUpdater:
             print("Weather data is already up to date.")
         else:
             weather_data = self.fetch_weather_data(newest_date_weather)
-            print("Fetched weather data:", weather_data.shape)
-            self.save_data_to_csv(weather_data, self.weather_data_dir)
-            print("Update weather data date is:", self.get_newest_date_from_csv(self.weather_data_dir))
+            if weather_data.empty:
+                print("No new weather data was fetched.")
+            else:
+                print("Fetched weather data:", weather_data.shape)
+                self.save_data_to_csv(weather_data, self.weather_data_dir)
+                print("Updated weather data date is:", self.get_newest_date_from_csv(self.weather_data_dir))
 
         return self
 
