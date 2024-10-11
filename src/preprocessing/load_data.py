@@ -70,7 +70,7 @@ class DataLoader:
         return data
     
     @staticmethod
-    def filter_border(data):
+    def filter_border(data, resolution="50km"):
         """
         Filters the data based on administrative borders.
 
@@ -78,6 +78,8 @@ class DataLoader:
         ----------
         data : DataFrame
             Fire data.
+        resolution : str, optional
+            The resolution of the data files to be loaded. Default is "50km".
         Returns
         -------
         DataFrame
@@ -93,14 +95,17 @@ class DataLoader:
         data_inside.columns = map(str.upper, data_inside.columns)
         data_inside.drop(columns=['ID'], inplace=True)
         data_inside.rename(columns={'LATITUDE': 'LATITUDE_ORIGINAL', 'LONGITUDE': 'LONGITUDE_ORIGINAL'}, inplace=True)
-        # Round the latitude and longitude to the nearest .5 or .0
-        data_inside['LATITUDE'], data_inside['LONGITUDE'] = zip(*data_inside.apply(lambda x: round_lat_lon(x['LATITUDE_ORIGINAL'], x['LONGITUDE_ORIGINAL']), axis=1))
+        data_inside['LATITUDE'], data_inside['LONGITUDE'] = zip(*data_inside.apply(lambda x: round_lat_lon(x['LATITUDE_ORIGINAL'], 
+                                                                                                           x['LONGITUDE_ORIGINAL'], 
+                                                                                                           resolution=resolution), 
+                                                                                                           axis=1))
         data_inside['GRID_CELL'] = data_inside['LATITUDE'].astype(str) + '_' + data_inside['LONGITUDE'].astype(str)
-        data_inside = data_inside[['FIRE_ID', 'LATITUDE_ORIGINAL', 'LONGITUDE_ORIGINAL', 'LATITUDE', 'LONGITUDE', 'GRID_CELL', 'ACQ_DATE', 'DAY_OF_YEAR']]
+        data_inside = data_inside[['FIRE_ID', 'LATITUDE_ORIGINAL', 'LONGITUDE_ORIGINAL', 'LATITUDE', 'LONGITUDE', 
+                                   'GRID_CELL', 'ACQ_DATE', 'DAY_OF_YEAR']]
         return data_inside
 
     @staticmethod
-    def load_dynamic_data(start_date, end_date):
+    def load_dynamic_data(start_date, end_date, resolution="50km"):
         """
         Loads and processes dynamic fire and weather data within a specified date range.
         This function reads CSV files from specified directories, filters them by the given date range,
@@ -112,6 +117,8 @@ class DataLoader:
             The start date for filtering the data.
         end_date : datetime
             The end date for filtering the data.
+        resolution : str, optional
+            The resolution of the data files to be loaded. Default is "50km".
         Returns
         -------
         tuple
@@ -138,7 +145,7 @@ class DataLoader:
         weather_data = DataLoader.filter_date(weather_data, start_date, end_date)
 
         fire_data = DataLoader.preprocess_fire_data(fire_data)
-        fire_data = DataLoader.filter_border(fire_data)
+        fire_data = DataLoader.filter_border(fire_data, resolution=resolution)
         
         return fire_data, weather_data
     
@@ -157,6 +164,7 @@ class DataLoader:
         -------
         DataFrame
             A DataFrame containing the merged data from all the relevant CSV files.
+            Else, returns None if no data is found for the specified resolution.
         """
         dataframes = []
         folders = [get_path("oblasts_data_dir"), get_path("land_use_data_dir"), get_path("pop_density_data_dir")]
@@ -172,12 +180,18 @@ class DataLoader:
             merged_data = dataframes[0]
             for df in dataframes[1:]:
                 merged_data = pd.merge(merged_data, df, on=['LONGITUDE', 'LATITUDE'], how='outer')
+            # Reduce the impact of outliers by capping the population density at the 95th percentile
+            percentile_95_pop_density = merged_data['POP_DENSITY'].quantile(0.95)
+            merged_data.loc[merged_data['POP_DENSITY'] > percentile_95_pop_density, 'POP_DENSITY'] = percentile_95_pop_density
             return merged_data
-        return merged_data
+        return None
 
 def main():
-    static_data = DataLoader.load_static_data(resolution="50km")
-    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=pd.to_datetime('2020-01-01').date(), end_date=pd.to_datetime('2022-12-31').date())
+    resolution = "50km"
+    static_data = DataLoader.load_static_data(resolution=resolution)
+    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=pd.to_datetime('2020-01-01').date(), 
+                                                           end_date=pd.to_datetime('2022-12-31').date(), 
+                                                           resolution=resolution)
     print("Fire Data - Min Date:", fire_data['ACQ_DATE'].min(), "Max Date:", fire_data['ACQ_DATE'].max())
     print("Weather Data - Min Date:", weather_data['ACQ_DATE'].min(), "Max Date:", weather_data['ACQ_DATE'].max())
     print("Static Data - Shape:", static_data.shape)

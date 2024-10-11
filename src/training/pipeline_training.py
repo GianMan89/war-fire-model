@@ -385,7 +385,7 @@ class FirePredictionPipeline:
         df_nn_alldays.to_csv(f"{file_prefix}_nn_results_alldays.csv", index=False)
 
     
-def save_pipeline(model, model_name):
+def save_pipeline(model, model_name, resolution="50km"):
     """
     Save the model to disk in multiple parts.
     This method saves the model to the directory specified by the
@@ -398,15 +398,17 @@ def save_pipeline(model, model_name):
         The model to be saved.
     model_name : str
         The name of the model to be saved.
+    resolution : str
+        The resolution used. Default is "50km".
     
     Returns
     -------
     None
     """
 
-    _ = save_large_model(model, f"{get_path("models_dir")}/{model_name}", part_size=90)
+    _ = save_large_model(model, f"{get_path("models_dir")}/{resolution}/{model_name}", part_size=90)
 
-def load_pipeline(model_name, parts_number=None):
+def load_pipeline(model_name, parts_number=None, resolution="50km"):
     """
     Load the saved model.
     This method loads a previously saved model from the specified directory.
@@ -420,19 +422,22 @@ def load_pipeline(model_name, parts_number=None):
         The number of parts the model was split into during saving. If not provided, 
         the method will attempt to infer the number of parts based on the files in the directory.
         Defaults to None.
+    resolution : str
+        The resolution used. Default is "50km".
     """
 
-    return load_large_model(f"{get_path("models_dir")}/{model_name}", parts_number)
+    return load_large_model(f"{get_path("models_dir")}/{resolution}/{model_name}", parts_number)
 
 
 def main():
     # Example usage
+    resolution = "50km"
     start_date = pd.to_datetime('2015-01-01').date()
     end_date = pd.to_datetime('2022-02-23').date()
     calib_date = pd.to_datetime('2021-02-23').date()
     print("Loading data...")
-    static_data = DataLoader.load_static_data(resolution="50km")
-    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date)
+    static_data = DataLoader.load_static_data(resolution=resolution)
+    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=resolution)
     feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
     time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
     X_train, X_calib, y_train, y_calib, ids_train, ids_calib = feature_engineering.get_train_calibration_split(time_series_data, 
@@ -455,7 +460,8 @@ def main():
     y_pred_decay, y_scores_decay, y_pred, y_scores = pipeline.predict(X_test, y_test, ids_test)
     print("\nPredictions and scores calculated successfully.")
     pipeline.save_predictions_to_csv(fire_data[fire_data["ACQ_DATE"] >= calib_date], 
-                                     y_pred_decay, y_scores_decay, y_pred, y_scores, ids_test, "results/calibration_predictions.csv")
+                                     y_pred_decay, y_scores_decay, y_pred, y_scores, ids_test, 
+                                     f"results/{resolution}/calibration_predictions.csv")
     print("Prediction results saved successfully.")
 
     pipeline.fit_onn(X_train, y_train, ids_train)
@@ -463,12 +469,12 @@ def main():
     X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test, ids_test)
     print("Nearest neighbors calculated successfully.")
     pipeline.save_nn_results(X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays, X_train.columns, 
-                             "results/calibration")
+                             f"results/{resolution}/calibration")
     print("Nearest neighbors results saved successfully.")
 
-    save_pipeline(pipeline, "pipeline")
+    save_pipeline(pipeline, "pipeline", resolution=resolution)
     print("\nPipeline saved successfully.")
-    pipeline_loaded = load_pipeline("pipeline")
+    pipeline_loaded = load_pipeline("pipeline", resolution=resolution)
     print("Pipeline loaded successfully.")
     print("Pipeline: ", pipeline_loaded.pipeline.steps)
 
@@ -476,8 +482,8 @@ def main():
     start_date = pd.to_datetime('2022-02-24').date()
     end_date = pd.to_datetime('2024-09-30').date()
     print("\nLoading test data...")
-    static_data = DataLoader.load_static_data(resolution="50km")
-    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date)
+    static_data = DataLoader.load_static_data(resolution=resolution)
+    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=resolution)
     feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
     time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
     X_test, y_test, ids_test = feature_engineering.get_test_data(time_series_data)
@@ -486,25 +492,25 @@ def main():
     y_pred_decay, y_scores_decay, y_pred, y_scores = pipeline.predict(X_test, y_test, ids_test)
     print("Predictions and scores calculated successfully.")
     pipeline.save_predictions_to_csv(fire_data, y_pred_decay, y_scores_decay, y_pred, y_scores, ids_test, 
-                                     "results/test_predictions.csv")
+                                     f"results/{resolution}/test_predictions.csv")
     print("Prediction results saved successfully.")
     
     X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test, ids_test)
     print("Nearest neighbors calculated successfully.")
     pipeline.save_nn_results(X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays, X_train.columns, 
-                             "results/test")
+                             f"results/{resolution}/test")
     print("Nearest neighbors results saved successfully.")
 
     # Get an explanation for a single instance
     idx_instance = 2000
     instance = X_test.iloc[idx_instance]
     exp = pipeline.get_explanation(instance.values)
-    pipeline.save_explanation_instance(exp, f"results/plots/explanation_{idx_instance}")
+    pipeline.save_explanation_instance(exp, f"results/{resolution}/plots/explanation_{idx_instance}")
     print("Explanation instance generated successfully.")
 
     # Explain the test data
     X_test_subset = X_test.iloc[:10000].reset_index(drop=True)
-    explanations_df = pipeline.explain_data(X_test_subset, file_path="results/test_explanations.csv")
+    explanations_df = pipeline.explain_data(X_test_subset, file_path=f"results/{resolution}/test_explanations.csv")
     print("Explanations generated successfully.")
 
 if __name__ == "__main__":

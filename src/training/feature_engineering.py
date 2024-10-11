@@ -179,11 +179,12 @@ class FeatureEngineering:
     
 
 def main():
+    resolution = "50km"
     start_date = pd.to_datetime('2020-01-01').date()
     end_date = pd.to_datetime('2022-12-31').date()
     calib_date = pd.to_datetime('2022-01-01').date()
-    static_data = DataLoader.load_static_data(resolution="50km")
-    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date)
+    static_data = DataLoader.load_static_data(resolution=resolution)
+    fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=resolution)
     feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
     time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
     X_train, X_calib, y_train, y_calib, ids_train, ids_calib = feature_engineering.get_train_calibration_split(time_series_data, 
