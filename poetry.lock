@@ -2111,6 +2111,17 @@ files = [
 ]
 
 [[package]]
+name = "split-file-reader"
+version = "0.1.4"
+description = "A package to read parted files on disk."
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "split_file_reader-0.1.4-py3-none-any.whl", hash = "sha256:b113844ff733707de95c874d48f390f8fa0ec82a4c33f61edd61f4bd37ffd625"},
+    {file = "split_file_reader-0.1.4.tar.gz", hash = "sha256:45bf503999640dd8c38a200878a5f4e9d6486ac57b26c953c13b5eea4da8852a"},
+]
+
+[[package]]
 name = "stack-data"
 version = "0.6.3"
 description = "Extract data from python stack frames and tracebacks for informative displays"
@@ -2273,4 +2284,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "ace6fdb0935cc524497884c94f90c9e149affb2392ac2426d07cb60b335e690f"
+content-hash = "567d47f7b08b6885f34dbbb2f8b8271a6820ba0cc3434646bb8b4bf471a77566"
