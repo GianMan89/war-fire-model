@@ -134,9 +134,11 @@ class FeatureEngineering:
             The fire IDs and ACQ_DATE of the calibration data.
         """
         X_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID',
-                                                                                                  'ACQ_DATE', 'GRID_CELL']).reset_index(drop=True)
+                                                                                                  'ACQ_DATE', 'GRID_CELL', 'LATITUDE_ORIGINAL', 
+                                                                                                  'LONGITUDE_ORIGINAL']).reset_index(drop=True)
         X_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib].drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID',
-                                                                                                   'ACQ_DATE', 'GRID_CELL']).reset_index(drop=True)
+                                                                                                   'ACQ_DATE', 'GRID_CELL', 'LATITUDE_ORIGINAL', 
+                                                                                                  'LONGITUDE_ORIGINAL']).reset_index(drop=True)
         y_train = time_series_data[time_series_data['ACQ_DATE'] < start_date_calib]['FIRE_COUNT_CELL'].reset_index(drop=True)
         y_calib = time_series_data[time_series_data['ACQ_DATE'] >= start_date_calib]['FIRE_COUNT_CELL'].reset_index(drop=True)
         # Get the fire IDs and acquisition dates for the training and calibration sets but only for those dates
@@ -172,7 +174,8 @@ class FeatureEngineering:
         ids_calib : DataFrame
             The fire IDs and ACQ_DATE of the calibration data.
         """
-        X_test = time_series_data.drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID', 'ACQ_DATE', 'GRID_CELL']).reset_index(drop=True)
+        X_test = time_series_data.drop(columns=['FIRE_COUNT_CELL', 'OBLAST_ID', 'ACQ_DATE', 'GRID_CELL', 'LATITUDE_ORIGINAL', 
+                                                                                                  'LONGITUDE_ORIGINAL']).reset_index(drop=True)
         y_test = time_series_data['FIRE_COUNT_CELL'].reset_index(drop=True)
         ids_test = time_series_data[['ACQ_DATE', 'GRID_CELL']].reset_index(drop=True)
         return X_test, y_test, ids_test

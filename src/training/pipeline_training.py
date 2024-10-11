@@ -377,12 +377,12 @@ class FirePredictionPipeline:
         df_nn_firedays = pd.DataFrame(X_nn_firedays, columns=X_columns)
         df_nn_firedays['FIRE_COUNT_CELL'] = y_nn_firedays
         
-        df_nn_alldays = pd.DataFrame(X_nn_nofiredays, columns=X_columns)
-        df_nn_alldays['FIRE_COUNT_CELL'] = y_nn_nofiredays
+        df_nn_nofiredays = pd.DataFrame(X_nn_nofiredays, columns=X_columns)
+        df_nn_nofiredays['FIRE_COUNT_CELL'] = y_nn_nofiredays
         
         # Save to CSV files
         df_nn_firedays.to_csv(f"{file_prefix}_nn_results_firedays.csv", index=False)
-        df_nn_alldays.to_csv(f"{file_prefix}_nn_results_alldays.csv", index=False)
+        df_nn_nofiredays.to_csv(f"{file_prefix}_nn_results_nofiredays.csv", index=False)
 
     
 def save_pipeline(model, model_name, resolution="50km"):
@@ -466,11 +466,14 @@ def main():
 
     pipeline.fit_onn(X_train, y_train, ids_train)
     print("\nOne Nearest Neighbor model fitted successfully.")
-    X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test, ids_test)
+    X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test.iloc[:400000], 
+                                                                                      ids_test.iloc[:400000])
     print("Nearest neighbors calculated successfully.")
     pipeline.save_nn_results(X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays, X_train.columns, 
                              f"results/{resolution}/calibration")
     print("Nearest neighbors results saved successfully.")
+    X_test.iloc[:400000].to_csv(f"results/{resolution}/calibration_data.csv", index=False)
+    print("Calibration data saved successfully.")
 
     save_pipeline(pipeline, "pipeline", resolution=resolution)
     print("\nPipeline saved successfully.")
@@ -495,11 +498,14 @@ def main():
                                      f"results/{resolution}/test_predictions.csv")
     print("Prediction results saved successfully.")
     
-    X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test, ids_test)
+    X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test.iloc[:400000], 
+                                                                                      ids_test.iloc[:400000])
     print("Nearest neighbors calculated successfully.")
     pipeline.save_nn_results(X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays, X_train.columns, 
                              f"results/{resolution}/test")
     print("Nearest neighbors results saved successfully.")
+    X_test.iloc[:400000].to_csv(f"results/{resolution}/test_data.csv", index=False)
+    print("Test data saved successfully.")
 
     # Get an explanation for a single instance
     idx_instance = 2000
@@ -509,7 +515,7 @@ def main():
     print("Explanation instance generated successfully.")
 
     # Explain the test data
-    X_test_subset = X_test.iloc[:10000].reset_index(drop=True)
+    X_test_subset = X_test.iloc[:1000].reset_index(drop=True)
     explanations_df = pipeline.explain_data(X_test_subset, file_path=f"results/{resolution}/test_explanations.csv")
     print("Explanations generated successfully.")
 
