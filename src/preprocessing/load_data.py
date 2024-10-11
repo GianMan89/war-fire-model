@@ -92,10 +92,11 @@ class DataLoader:
         data_inside.reset_index(drop=True, inplace=True)
         data_inside.columns = map(str.upper, data_inside.columns)
         data_inside.drop(columns=['ID'], inplace=True)
+        data_inside.rename(columns={'LATITUDE': 'LATITUDE_ORIGINAL', 'LONGITUDE': 'LONGITUDE_ORIGINAL'}, inplace=True)
         # Round the latitude and longitude to the nearest .5 or .0
-        data_inside['LATITUDE'], data_inside['LONGITUDE'] = zip(*data_inside.apply(lambda x: round_lat_lon(x['LATITUDE'], x['LONGITUDE']), axis=1))
+        data_inside['LATITUDE'], data_inside['LONGITUDE'] = zip(*data_inside.apply(lambda x: round_lat_lon(x['LATITUDE_ORIGINAL'], x['LONGITUDE_ORIGINAL']), axis=1))
         data_inside['GRID_CELL'] = data_inside['LATITUDE'].astype(str) + '_' + data_inside['LONGITUDE'].astype(str)
-        data_inside = data_inside[['FIRE_ID', 'LATITUDE', 'LONGITUDE', 'GRID_CELL', 'ACQ_DATE', 'DAY_OF_YEAR']]
+        data_inside = data_inside[['FIRE_ID', 'LATITUDE_ORIGINAL', 'LONGITUDE_ORIGINAL', 'LATITUDE', 'LONGITUDE', 'GRID_CELL', 'ACQ_DATE', 'DAY_OF_YEAR']]
         return data_inside
 
     @staticmethod

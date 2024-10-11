@@ -63,10 +63,6 @@ class FirePredictionPipeline:
         Gets an explanation for a single instance using the LIME explainer.
     save_explanation_instance(exp, file_name="explanation")
         Saves the explanation as an HTML file.
-    save()
-        Saves the pipeline to disk in parts.
-    load()
-        Loads the pipeline from disk. Requires the pipeline to be saved first.
     """
 
     def __init__(self):
@@ -341,11 +337,11 @@ class FirePredictionPipeline:
                                             'ABNORMAL_LABEL_DECAY', 'SIGNIFICANCE_SCORE_DECAY']], 
                                         on=['GRID_CELL', 'ACQ_DATE'], 
                                         how='left')
-
         # Keep only the ACQ_DATE, LONGITUDE, LATITUDE, and prediction columns
-        data = data[['ACQ_DATE', 'LONGITUDE', 'LATITUDE', 'ABNORMAL_LABEL', 'SIGNIFICANCE_SCORE', 
+        data = data[['ACQ_DATE', 'LONGITUDE_ORIGINAL', 'LATITUDE_ORIGINAL', 'ABNORMAL_LABEL', 'SIGNIFICANCE_SCORE', 
                      'ABNORMAL_LABEL_DECAY', 'SIGNIFICANCE_SCORE_DECAY']]
-
+        # Rename labels
+        data.rename(columns={'LATITUDE_ORIGINAL': 'LATITUDE', 'LONGITUDE_ORIGINAL': 'LONGITUDE'}, inplace=True)
         # Save the DataFrame to a CSV file
         data.to_csv(file_path, index=False)
         print(f"Prediction results saved to {file_path}")
@@ -389,7 +385,7 @@ class FirePredictionPipeline:
         df_nn_alldays.to_csv(f"{file_prefix}_nn_results_alldays.csv", index=False)
 
     
-def save(model, model_name):
+def save_pipeline(model, model_name):
     """
     Save the model to disk in multiple parts.
     This method saves the model to the directory specified by the
@@ -410,7 +406,7 @@ def save(model, model_name):
 
     _ = save_large_model(model, f"{get_path("models_dir")}/{model_name}", part_size=90)
 
-def load(model_name, parts_number=None):
+def load_pipeline(model_name, parts_number=None):
     """
     Load the saved model.
     This method loads a previously saved model from the specified directory.
@@ -470,9 +466,9 @@ def main():
                              "results/calibration")
     print("Nearest neighbors results saved successfully.")
 
-    save(pipeline, "pipeline")
+    save_pipeline(pipeline, "pipeline")
     print("\nPipeline saved successfully.")
-    pipeline_loaded = load("pipeline")
+    pipeline_loaded = load_pipeline("pipeline")
     print("Pipeline loaded successfully.")
     print("Pipeline: ", pipeline_loaded.pipeline.steps)
 
