@@ -183,6 +183,19 @@ class DataLoader:
             # Reduce the impact of outliers by capping the population density at the 95th percentile
             percentile_95_pop_density = merged_data['POP_DENSITY'].quantile(0.95)
             merged_data.loc[merged_data['POP_DENSITY'] > percentile_95_pop_density, 'POP_DENSITY'] = percentile_95_pop_density
+            # Check for NaN values and fill them using the nearest non-NaN value based on Latitude and Longitude
+            if merged_data.isna().sum().sum() > 0:
+                nan_rows = merged_data[merged_data.isna().any(axis=1)]
+                non_nan_rows = merged_data[merged_data.notna().any(axis=1)]
+                for idx, nan_row in nan_rows.iterrows(): 
+                        distances = non_nan_rows.apply(
+                            lambda row: ((row['LATITUDE'] - nan_row['LATITUDE'])**2 + (row['LONGITUDE'] - nan_row['LONGITUDE'])**2)**0.5, 
+                            axis=1
+                        )
+                        closest_row_idx = distances.idxmin()
+                        for col in nan_row.index:
+                            if pd.isna(nan_row[col]):
+                                merged_data.at[idx, col] = merged_data.at[closest_row_idx, col]
             return merged_data
         return None
 
