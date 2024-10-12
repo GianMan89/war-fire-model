@@ -1,8 +1,6 @@
 import os
 import sys
 import pandas as pd
-import numpy as np
-from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.base import BaseEstimator, TransformerMixin
 
@@ -16,48 +14,52 @@ sys.path.append(project_root)
 
 from src.preprocessing.load_data import DataLoader
 from src.preprocessing.feature_engineering import FeatureEngineering
-from config.config import get_parameter
 
-class DataHandlingPipeline(BaseEstimator, TransformerMixin):
-    """
-    A data handling pipeline to provide input data for the model pipeline.
+class DataHandler(BaseEstimator, TransformerMixin):
+    """"
+    DataHandler is a custom transformer for handling and processing data for the war-fire model.
     
-    This class handles loading, transforming, and imputing missing data for both dynamic and static datasets.
+    Parameters
+    ----------
+    resolution : str, default='50km'
+        The spatial resolution for loading static and dynamic data.
     
     Attributes
     ----------
     resolution : str
-        The resolution of the data files to be loaded.
-    start_date : str
-        The start date for the data in 'YYYY-MM-DD' format.
-    end_date : str
-        The end date for the data in 'YYYY-MM-DD' format.
-    calib_date : str
-        The calibration date used to split the data.
+        The spatial resolution for loading static and dynamic data.
+    feature_engineering : FeatureEngineering
+        An instance of the FeatureEngineering class for transforming the data.
+    static_data : Any
+        The static data loaded based on the specified resolution.
     
     Methods
     -------
     fit(X, y=None)
-        Placeholder for fitting the data pipeline.
-    transform(X)
-        Loads and processes the fire, weather, and static data.
+        Loads static data based on the specified resolution.
+    transform(start_date, end_date)
+        Loads dynamic data for the given date range and applies feature engineering to transform the data.
+    fit_transform(X=None, y=None, start_date='2015-01-01', end_date='2022-02-23')
+        Fits the transformer to the data and transforms the data.
     """
-    def __init__(self, resolution='50km', start_date='2015-01-01', end_date='2022-12-31', calib_date='2021-02-23'):
+    def __init__(self, resolution='50km'):
         self.resolution = resolution
-        self.start_date = pd.to_datetime(start_date).date()
-        self.end_date = pd.to_datetime(end_date).date()
-        self.calib_date = pd.to_datetime(calib_date).date()
-        self.feature_engineering = FeatureEngineering(start_date=self.start_date, end_date=self.end_date)
+        self.feature_engineering = FeatureEngineering()
+        self.static_data = None
 
-    def fit(self, X, y=None):
-        # No fitting is required for this data pipeline.
+    def fit(self, X=None, y=None):
+        self.static_data = DataLoader.load_static_data(resolution=self.resolution)
         return self
 
-    def transform(self, X):
-        static_data = DataLoader.load_static_data(resolution=self.resolution)
-        fire_data, weather_data = DataLoader.load_dynamic_data(start_date=self.start_date, end_date=self.end_date, resolution=self.resolution)
-        time_series_data = self.feature_engineering.transform(fire_data, static_data, weather_data)
-        return time_series_data
+    def transform(self, X=None, y=None, start_date='2015-01-01', end_date='2022-02-23'):
+        fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=self.resolution)
+        X, y, ids = self.feature_engineering.transform(fire_data, self.static_data, weather_data, start_date=start_date, 
+                                                       end_date=end_date)
+        return X, y, ids
+    
+    def fit_transform(self, X=None, y=None, start_date='2015-01-01', end_date='2022-02-23'):
+        self.fit(X, y)
+        return self.transform(X, y, start_date=start_date, end_date=end_date)
 
 class DataImputer(BaseEstimator, TransformerMixin):
     """
@@ -85,28 +87,67 @@ class DataImputer(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         return pd.DataFrame(self.imputer.transform(X), columns=X.columns, index=X.index)
+    
+    def fit_transform(self, X, y=None):
+        self.fit(X, y)
+        return self.transform(X)
+    
+class DataPipeline:
+    """
+    DataPipeline class to handle the entire data processing pipeline.
+    
+    Attributes
+    ----------
+    resolution : str
+        The resolution of the data files to be loaded.
+    
+    Methods
+    -------
+    fit(X, y=None)
+        Fits the data handler and imputer to the data.
+    transform(X)
+        Transforms the data using the data handler and imputer.
+    """
+    def __init__(self, resolution='50km'):
+        self.resolution = resolution
+        self.data_handler = DataHandler(resolution=resolution)
+        self.imputer = DataImputer(strategy='mean')
+
+    def fit(self, start_date='2015-01-01', end_date='2022-02-23'):
+        start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
+        data, _, _ = self.data_handler.fit_transform(X=None, y=None, start_date=start_date, end_date=end_date)
+        self.imputer.fit(data)
+        return self
+
+    def transform(self, start_date='2015-01-01', end_date='2022-02-23'):
+        start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
+        X, y, ids = self.data_handler.transform(X=None, y=None, start_date=start_date, end_date=end_date)
+        X_imputed = self.imputer.transform(X)
+        return X_imputed, y, ids
+    
+    def fit_transform(self, start_date='2015-01-01', end_date='2022-02-23'):
+        start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
+        self.fit(start_date=start_date, end_date=end_date)
+        return self.transform(start_date=start_date, end_date=end_date)
+    
+    @staticmethod
+    def force_datetime(date):
+        return pd.to_datetime(date).date()
 
 if __name__ == "__main__":
     resolution = "50km"
     start_date = '2020-01-01'
     end_date = '2022-12-31'
-    calib_date = '2022-01-01'
-
-    # Create the data handling pipeline
-    data_pipeline = Pipeline([
-        ('data_handler', DataHandlingPipeline(resolution=resolution, start_date=start_date, end_date=end_date, calib_date=calib_date)),
-        ('imputer', DataImputer(strategy='mean'))
-    ])
-
-    # Process the data using the pipeline
-    time_series_data = data_pipeline.fit_transform(None)
-
-    # Split the data into training and calibration sets
-    feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
-    X_train, X_calib, y_train, y_calib, ids_train, ids_calib = feature_engineering.get_train_calibration_split(time_series_data, start_date_calib=calib_date)
-
-    # Display the shapes of the generated datasets
-    print("Shape of the training data:", X_train.shape)
-    print("Shape of the calibration data:", X_calib.shape)
-    print("Shape of the training target variable:", y_train.shape)
-    print("Shape of the calibration target variable:", y_calib.shape)
+    
+    pipeline = DataPipeline(resolution=resolution)
+    X, y, ids = pipeline.fit_transform(start_date=start_date, end_date=end_date)
+    print("X shape:", X.shape)
+    print("y shape:", y.shape)
+    print("ids shape:", ids.shape)
+    
+    start_date = '2023-01-01'
+    end_date = '2023-12-31'
+    X, y, ids = pipeline.transform(start_date=start_date, end_date=end_date)
+    print("X shape:", X.shape)
+    print("y shape:", y.shape)
+    print("ids shape:", ids.shape)
