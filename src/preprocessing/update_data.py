@@ -359,12 +359,6 @@ class DataUpdater:
 
         return self
 
-def main():
-    """
-    Main function to demonstrate the usage of DataUpdater.
-    """
+if __name__ == "__main__":
     updater = DataUpdater()
     updater.update_data()
-
-if __name__ == "__main__":
-    main()
