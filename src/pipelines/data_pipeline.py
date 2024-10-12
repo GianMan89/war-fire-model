@@ -35,9 +35,9 @@ class DataHandler(BaseEstimator, TransformerMixin):
     
     Methods
     -------
-    fit(X, y=None)
+    fit(X=None, y=None)
         Loads static data based on the specified resolution.
-    transform(start_date, end_date)
+    transform(X=None, y=None, start_date='2015-01-01', end_date='2022-02-23')
         Loads dynamic data for the given date range and applies feature engineering to transform the data.
     fit_transform(X=None, y=None, start_date='2015-01-01', end_date='2022-02-23')
         Fits the transformer to the data and transforms the data.
@@ -76,6 +76,8 @@ class DataImputer(BaseEstimator, TransformerMixin):
         Fits the imputer to the data.
     transform(X)
         Imputes missing values in the data.
+    fit_transform(X, y=None)
+        Fits the imputer to the data and imputes missing values.
     """
     def __init__(self, strategy='mean'):
         self.strategy = strategy
@@ -103,10 +105,12 @@ class DataPipeline:
     
     Methods
     -------
-    fit(X, y=None)
+    fit(start_date='2015-01-01', end_date='2022-02-23')
         Fits the data handler and imputer to the data.
-    transform(X)
+    transform(start_date='2015-01-01', end_date='2022-02-23')
         Transforms the data using the data handler and imputer.
+    fit_transform(start_date='2015-01-01', end_date='2022-02-23')
+        Fits the data handler and imputer to the data and transforms the data.
     """
     def __init__(self, resolution='50km'):
         self.resolution = resolution
