@@ -18,6 +18,8 @@ paths = {
     "oblasts_data_dir": "data/ukr_oblasts",
     "pop_density_data_dir": "data/ukr_pop_density",
     "border_data_dir": "data/ukr_borders",
+    "war_events_data_dir": "data/ukr_war_events",
+    "output_plots_dir": "results/50km/plots",
     }
 
 def get_path(path_id):
