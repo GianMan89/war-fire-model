@@ -96,7 +96,6 @@ class FeatureEngineering:
         4. Merges the fire data with static data based on latitude and longitude.
         5. Converts the 'ACQ_DATE' column to datetime.date format.
         6. Merges the fire data with weather data based on oblast ID and acquisition date.
-        7. Checks for NaN values and replaces them with the closest non-NaN value based on latitude, longitude, and day of year.
         """
         fire_data.sort_values('ACQ_DATE', inplace=True)
         fire_data['FIRE_COUNT_CELL'] = fire_data.groupby(['GRID_CELL', 'ACQ_DATE'])['ACQ_DATE'].transform('count')
@@ -104,33 +103,6 @@ class FeatureEngineering:
         time_series_data = pd.merge(time_series_data, static_data, how='left', on=['LATITUDE', 'LONGITUDE'])
         time_series_data['ACQ_DATE'] = time_series_data['ACQ_DATE'].apply(lambda x: pd.to_datetime(x).date())
         time_series_data = pd.merge(time_series_data, weather_data, how='left', on=['OBLAST_ID', 'ACQ_DATE'])
-        if time_series_data.isna().sum().sum() > 0:
-            lat_min, lat_max = time_series_data['LATITUDE'].min(), time_series_data['LATITUDE'].max()
-            lon_min, lon_max = time_series_data['LONGITUDE'].min(), time_series_data['LONGITUDE'].max()
-            doy_min, doy_max = time_series_data['DAY_OF_YEAR'].min(), time_series_data['DAY_OF_YEAR'].max()
-            nan_rows = time_series_data[time_series_data.isna().any(axis=1)]
-            non_nan_rows = time_series_data[time_series_data.notna().all(axis=1)]
-            for idx, nan_row in nan_rows.iterrows(): 
-                    filtered_rows = non_nan_rows[
-                        (non_nan_rows['DAY_OF_YEAR'] >= nan_row['DAY_OF_YEAR'] - 7) &
-                        (non_nan_rows['DAY_OF_YEAR'] <= nan_row['DAY_OF_YEAR'] + 7) &
-                        (non_nan_rows['LATITUDE'] >= nan_row['LATITUDE'] - 1.0) &
-                        (non_nan_rows['LATITUDE'] <= nan_row['LATITUDE'] + 1.0) &
-                        (non_nan_rows['LONGITUDE'] >= nan_row['LONGITUDE'] - 1.0) &
-                        (non_nan_rows['LONGITUDE'] <= nan_row['LONGITUDE'] + 1.0)
-                    ]
-                    distances = filtered_rows.apply(
-                        lambda row: (
-                            ((row['LATITUDE'] - nan_row['LATITUDE']) / (lat_max - lat_min))**2 + 
-                            ((row['LONGITUDE'] - nan_row['LONGITUDE']) / (lon_max - lon_min))**2 + 
-                            ((row['DAY_OF_YEAR'] - nan_row['DAY_OF_YEAR']) / (doy_max - doy_min))**2
-                        )**0.5, 
-                        axis=1
-                    )
-                    closest_row_idx = distances.idxmin()
-                    for col in nan_row.index:
-                        if pd.isna(nan_row[col]):
-                            time_series_data.at[idx, col] = time_series_data.at[closest_row_idx, col]
         return time_series_data
     
     def get_train_calibration_split(self, time_series_data, start_date_calib):

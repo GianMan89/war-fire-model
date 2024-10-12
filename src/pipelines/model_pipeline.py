@@ -1,7 +1,6 @@
 import os
 import sys
 import pandas as pd
-import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from quantile_forest import RandomForestQuantileRegressor
@@ -16,7 +15,7 @@ project_root = os.path.abspath(os.path.join(current_path, '../../'))  # Adjust b
 sys.path.append(project_root)
 
 from src.preprocessing.load_data import DataLoader
-from src.training.feature_engineering import FeatureEngineering
+from src.preprocessing.feature_engineering import FeatureEngineering
 from config.config import get_parameter
 from utils.file_utils import get_path, save_large_model, load_large_model
 from src.models.error_threshold import ThresholdStep
@@ -431,7 +430,7 @@ def load_pipeline(model_name, parts_number=None, resolution="50km"):
 
 def main():
     # Example usage
-    for resolution in ["50km", "10km"]:
+    for resolution in ["50km"]:
         print(f"\nResolution: {resolution}")
         start_date = pd.to_datetime('2015-01-01').date()
         end_date = pd.to_datetime('2022-02-23').date()
@@ -445,6 +444,8 @@ def main():
                                                                                                                 start_date_calib=calib_date)
         print("Shape of the training data:", X_train.shape)
         print("Shape of the calibration data:", X_calib.shape)
+        print("Number of NaN values in training data:", X_train.isna().sum().sum())
+        print("Number of NaN values in calibration data:", X_calib.isna().sum().sum())
 
         pipeline = FirePredictionPipeline()
         print("\nFitting the pipeline...")
@@ -493,6 +494,7 @@ def main():
         time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
         X_test, y_test, ids_test = feature_engineering.get_test_data(time_series_data)
         print("Shape of the test data:", X_test.shape)
+        print("Number of NaN values in test data:", X_test.isna().sum().sum())
 
         y_pred_decay, y_scores_decay, y_pred, y_scores = pipeline.predict(X_test, y_test, ids_test)
         print("Predictions and scores calculated successfully.")
