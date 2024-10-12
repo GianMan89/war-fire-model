@@ -1,5 +1,4 @@
 START_DATE,END_DATE,EVENT
-2015-01-01,2022-02-23,Vor dem Krieg (bis 23. Februar 2022)
 2022-02-24,2022-04-30,Überfall und russischer Rückzug von Kiew und dem Norden der Ukraine
 2022-05-01,2022-06-30,Russische Offensive im Donbas
 2022-07-01,2022-08-30,Stillstand und Stellungskrieg
@@ -10,3 +9,4 @@ START_DATE,END_DATE,EVENT
 2023-10-01,2024-02-28,Einnahme von Awdijiwka und ukrainischer Ressourcenmangel
 2024-03-01,2024-07-30,Fortdauernde russische Luftangriffe und russische Bodenoffensiven im Donbas und um Charkiw
 2024-08-01,2024-09-30,Ukrainische Offensive in der Region Kursk und fortdauernde russische Bodenoffensiven im Donbas und um Charkiw
+2022-02-24,2024-09-30,Russischer Angriffskrieg in der Ukraine
