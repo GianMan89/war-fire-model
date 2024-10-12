@@ -31,9 +31,11 @@ class UkraineFirePlotting:
         A GeoDataFrame containing the shapefile of Ukrainian borders.
     Methods
     -------
-    plot_fire_data(data, title, colors=['red'], alphas=[0.25], markersizes=[1], plot_cities=False, city_color='yellow'])
-    plot_histogram(normal_scores, abnormal_scores, title)
-
+    plot_fire_data(data, event='', start_date=None, end_date=None, colors=['red'], alphas=[0.25], legend=False,
+                     markersizes=[1], plot_cities=False, city_color='yellow', cmaps=None, column=None)
+          Plot fire data within Ukrainian borders.
+    plot_histogram(normal_scores, abnormal_scores, start_date, end_date, event, column)
+            Plot histograms for significance scores of normal and abnormal fires.
     """
     def __init__(self):
         # Major cities in Ukraine with their coordinates and text shifts for plotting
@@ -64,10 +66,10 @@ class UkraineFirePlotting:
             List of dataframes containing fire data with longitude and latitude columns.
         event : str, optional
             Text description for the event.
-        start_date : str, optional
-            Start date for the event. Expected format: 'YYYY-MM-DD'.
-        end_date : str, optional
-            End date for the event. Expected format: 'YYYY-MM-DD'.
+        start_date : dt.datetime, optional
+            Start date for the event.
+        end_date : dt.datetime, optional
+            End date for the event.
         colors : list of str, optional
             List of colors for each dataset.
         alphas : list of float, optional
@@ -160,8 +162,14 @@ class UkraineFirePlotting:
             Significance scores for normal fires.
         abnormal_scores : array-like
             Significance scores for abnormal fires.
-        title : str
-            Title for the plot.
+        start_date : str or datetime.date
+            Start date for the event. Expected format: 'YYYY-MM-DD'.
+        end_date : str or datetime.date
+            End date for the event. Expected format: 'YYYY-MM-DD'.
+        event : str
+            Text description for the event.
+        column : str
+            Column name to use for plotting the histogram.
         """
         plt.figure(figsize=(12, 5))
         
