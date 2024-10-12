@@ -1,7 +1,7 @@
 import os
 import sys
 import pandas as pd
-from sklearn.impute import SimpleImputer
+from sklearn.impute import KNNImputer
 from sklearn.base import BaseEstimator, TransformerMixin
 
 import warnings
@@ -14,6 +14,7 @@ sys.path.append(project_root)
 
 from src.preprocessing.load_data import DataLoader
 from src.preprocessing.feature_engineering import FeatureEngineering
+from utils.file_utils import get_path, save_large_model, load_large_model
 
 class DataHandler(BaseEstimator, TransformerMixin):
     """"
@@ -55,7 +56,7 @@ class DataHandler(BaseEstimator, TransformerMixin):
         fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=self.resolution)
         X, y, ids = self.feature_engineering.transform(fire_data, self.static_data, weather_data, start_date=start_date, 
                                                        end_date=end_date)
-        return X, y, ids
+        return X, y, ids, fire_data
     
     def fit_transform(self, X=None, y=None, start_date='2015-01-01', end_date='2022-02-23'):
         self.fit(X, y)
@@ -64,6 +65,8 @@ class DataHandler(BaseEstimator, TransformerMixin):
 class DataImputer(BaseEstimator, TransformerMixin):
     """
     DataImputer class to handle imputation of missing data.
+    Uses the KNNImputer, which imputes missing values in the data by finding 
+    the nearest neighbors with non-missing values.
     
     Attributes
     ----------
@@ -81,7 +84,7 @@ class DataImputer(BaseEstimator, TransformerMixin):
     """
     def __init__(self, strategy='mean'):
         self.strategy = strategy
-        self.imputer = SimpleImputer(strategy=self.strategy)
+        self.imputer = KNNImputer(n_neighbors=1)
 
     def fit(self, X, y=None):
         self.imputer.fit(X)
@@ -119,15 +122,15 @@ class DataPipeline:
 
     def fit(self, start_date='2015-01-01', end_date='2022-02-23'):
         start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
-        data, _, _ = self.data_handler.fit_transform(X=None, y=None, start_date=start_date, end_date=end_date)
+        data, _, _, _ = self.data_handler.fit_transform(X=None, y=None, start_date=start_date, end_date=end_date)
         self.imputer.fit(data)
         return self
 
     def transform(self, start_date='2015-01-01', end_date='2022-02-23'):
         start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
-        X, y, ids = self.data_handler.transform(X=None, y=None, start_date=start_date, end_date=end_date)
+        X, y, ids, fire_data = self.data_handler.transform(X=None, y=None, start_date=start_date, end_date=end_date)
         X_imputed = self.imputer.transform(X)
-        return X_imputed, y, ids
+        return X_imputed, y, ids, fire_data
     
     def fit_transform(self, start_date='2015-01-01', end_date='2022-02-23'):
         start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
@@ -138,20 +141,70 @@ class DataPipeline:
     def force_datetime(date):
         return pd.to_datetime(date).date()
 
+def save_pipeline(model, model_name, resolution="50km"):
+    """
+    Save the model to disk in multiple parts.
+    This method saves the model to the directory specified by the
+    `models_dir` path and `model_name`. The model is split into multiple parts, each with
+    a maximum size of 90 MB.
+
+    Parameters
+    -------
+    model : object
+        The model to be saved.
+    model_name : str
+        The name of the model to be saved.
+    resolution : str
+        The resolution used. Default is "50km".
+    
+    Returns
+    -------
+    None
+    """
+
+    _ = save_large_model(model, f"{get_path("models_dir")}/{resolution}/{model_name}", part_size=90)
+
+def load_pipeline(model_name, parts_number=None, resolution="50km"):
+    """
+    Load the saved model.
+    This method loads a previously saved model from the specified directory.
+    The model is loaded in parts if `parts_number` is specified.
+
+    Parameters
+    ------
+    model_name : str
+        The name of the model to be loaded.
+    parts_number : int
+        The number of parts the model was split into during saving. If not provided, 
+        the method will attempt to infer the number of parts based on the files in the directory.
+        Defaults to None.
+    resolution : str
+        The resolution used. Default is "50km".
+    """
+
+    return load_large_model(f"{get_path("models_dir")}/{resolution}/{model_name}", parts_number)
+
 if __name__ == "__main__":
     resolution = "50km"
     start_date = '2020-01-01'
     end_date = '2022-12-31'
     
     pipeline = DataPipeline(resolution=resolution)
-    X, y, ids = pipeline.fit_transform(start_date=start_date, end_date=end_date)
+    X, y, ids, fires = pipeline.fit_transform(start_date=start_date, end_date=end_date)
     print("X shape:", X.shape)
     print("y shape:", y.shape)
     print("ids shape:", ids.shape)
+    print("fires shape:", fires.shape)
+
+    save_large_model(pipeline, f"{get_path('models_dir')}/{resolution}/data_pipeline", part_size=90)
+    print("Pipeline saved successfully!")
+    pipeline_loaded = load_large_model(f"{get_path('models_dir')}/{resolution}/data_pipeline")
+    print("Pipeline loaded successfully!")
     
     start_date = '2023-01-01'
     end_date = '2023-12-31'
-    X, y, ids = pipeline.transform(start_date=start_date, end_date=end_date)
+    X, y, ids, fires = pipeline_loaded.transform(start_date=start_date, end_date=end_date)
     print("X shape:", X.shape)
     print("y shape:", y.shape)
     print("ids shape:", ids.shape)
+    print("fires shape:", fires.shape)

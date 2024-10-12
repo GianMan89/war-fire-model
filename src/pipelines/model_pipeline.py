@@ -14,14 +14,13 @@ current_path = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_path, '../../'))  # Adjust based on depth
 sys.path.append(project_root)
 
-from src.preprocessing.load_data import DataLoader
-from src.preprocessing.feature_engineering import FeatureEngineering
 from config.config import get_parameter
 from utils.file_utils import get_path, save_large_model, load_large_model
 from src.models.error_threshold import ThresholdStep
 from src.models.score_decay import RecalculateConfidenceScores
 from src.models.nearest_neighbor import OneNearestNeighborModel
 from src.models.explainer import LimeExplainer
+from src.pipelines.data_pipeline import DataPipeline
 
 class FirePredictionPipeline:
     """
@@ -54,6 +53,8 @@ class FirePredictionPipeline:
         Fits the One Nearest Neighbor model using the training data.
     fit_explainer(X_train, feature_names)
         Fits the explainer model using the training data.
+    fit(X_train, y_train, X_calib, y_calib, ids_train)
+        Fits the pipeline using the training and calibration data.
     predict(X_test, y_test, ids_calib)
         Predicts the fire occurrence and confidence scores using the test data and calibration IDs.
     get_onn(X, ids)
@@ -166,6 +167,33 @@ class FirePredictionPipeline:
 
         self.explainer.fit(X_train, feature_names)
         self.explainer_fitted = True
+
+    def fit(self, X_train, y_train, X_calib, y_calib, ids_train):
+        """
+        Fit the pipeline using the training and calibration data.
+
+        Parameters
+        ----------
+        X_train : array-like of shape (n_samples, n_features)
+            The training input samples.
+        y_train : array-like of shape (n_samples,)
+            The target values for the training data.
+        X_calib : array-like of shape (n_samples, n_features)
+            The calibration input samples.
+        y_calib : array-like of shape (n_samples,)
+            The target values for the calibration data.
+        ids_train : DataFrame
+            DataFrame containing 'ACQ_DATE' and 'GRID_CELL' columns for training.
+        Returns
+        -------
+        None
+        """
+
+        self.fit_rf(X_train, y_train)
+        self.fit_threshold(X_calib, y_calib)
+        self.fit_onn(X_train, y_train, ids_train)
+        self.fit_explainer(X_train, X_train.columns)
+        return self
 
     def predict(self, X_test, y_test, ids_calib):
         """
@@ -297,22 +325,16 @@ class FirePredictionPipeline:
         return self.explainer.explain_data(data, predict_fn, num_features, file_path)
 
     @staticmethod
-    def save_predictions_to_csv(fire_data, y_pred_decay, y_scores_decay, y_pred, y_scores, ids_test, file_path):
+    def save_predictions_to_csv(y_pred, fire_data, ids_test, file_path):
         """
         Save the prediction results to a CSV file.
 
         Parameters
         ----------
+        y_pred : tuple
+            Tuple containing the predictions and scores.
         fire_data : DataFrame
             The original fire data DataFrame.
-        y_pred_decay : array-like of shape (n_samples,)
-            Predictions after applying decay.
-        y_scores_decay : array-like of shape (n_samples,)
-            Scores after applying decay.
-        y_pred : array-like of shape (n_samples,)
-            Raw predictions from the model.
-        y_scores : array-like of shape (n_samples,)
-            Raw scores from the model.
         ids_test : DataFrame
             DataFrame containing 'ACQ_DATE', 'LONGITUDE', and 'LATITUDE' columns.
         file_path : str
@@ -326,10 +348,10 @@ class FirePredictionPipeline:
         predictions = pd.DataFrame({
             'GRID_CELL': ids_test['GRID_CELL'],
             'ACQ_DATE': ids_test['ACQ_DATE'],
-            'ABNORMAL_LABEL': y_pred,
-            'SIGNIFICANCE_SCORE': y_scores,
-            'ABNORMAL_LABEL_DECAY': y_pred_decay,
-            'SIGNIFICANCE_SCORE_DECAY': y_scores_decay
+            'ABNORMAL_LABEL': y_pred[2],
+            'SIGNIFICANCE_SCORE': y_pred[3],
+            'ABNORMAL_LABEL_DECAY': y_pred[0],
+            'SIGNIFICANCE_SCORE_DECAY': y_pred[1]
         }) 
         # Merge fire_data with predictions to map the abnormal labels to individual fire IDs
         data = fire_data.merge(predictions[['GRID_CELL', 'ACQ_DATE', 'ABNORMAL_LABEL', 'SIGNIFICANCE_SCORE', 
@@ -346,7 +368,7 @@ class FirePredictionPipeline:
         print(f"Prediction results saved to {file_path}")
 
     @staticmethod
-    def save_nn_results(X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays, X_columns, file_prefix):
+    def save_nn_results(nn_results, X_test, y_test, file_prefix):
         """
         Save neural network results to CSV files.
         This function converts the provided numpy arrays into pandas DataFrames,
@@ -355,16 +377,12 @@ class FirePredictionPipeline:
 
         Parameters
         ----------
-        X_nn_firedays : numpy.ndarray
-            Feature matrix for days with fire incidents.
-        X_nn_nofiredays : numpy.ndarray
-            Feature matrix for days without fire incidents.
-        y_nn_firedays : numpy.ndarray
-            Target vector for days with fire incidents.
-        y_nn_nofiredays : numpy.ndarray
-            Target vector for days without fire incidents.
-        X_columns : list of str
-            List of column names for the feature matrices.
+        nn_results : tuple
+            Tuple containing the results for fire days and no fire days.
+        X_test : DataFrame
+            The test data used for prediction.
+        y_test : DataFrame
+            The target values for the test data.
         file_prefix : str
             Path prefix for the output CSV files.
         Returns
@@ -373,15 +391,16 @@ class FirePredictionPipeline:
         """
 
         # Convert the numpy arrays to pandas DataFrames
-        df_nn_firedays = pd.DataFrame(X_nn_firedays, columns=X_columns)
-        df_nn_firedays['FIRE_COUNT_CELL'] = y_nn_firedays
-        
-        df_nn_nofiredays = pd.DataFrame(X_nn_nofiredays, columns=X_columns)
-        df_nn_nofiredays['FIRE_COUNT_CELL'] = y_nn_nofiredays
-        
+        df_nn_firedays = pd.DataFrame(nn_results[0], columns=X_test.columns)
+        df_nn_firedays['FIRE_COUNT_CELL'] = nn_results[2] 
+        df_nn_nofiredays = pd.DataFrame(nn_results[1], columns=X_test.columns)
+        df_nn_nofiredays['FIRE_COUNT_CELL'] = nn_results[3]
+        df_original = X_test.copy()
+        df_original['FIRE_COUNT_CELL'] = y_test
         # Save to CSV files
         df_nn_firedays.to_csv(f"{file_prefix}_nn_results_firedays.csv", index=False)
         df_nn_nofiredays.to_csv(f"{file_prefix}_nn_results_nofiredays.csv", index=False)
+        df_original.to_csv(f"{file_prefix}_original_data.csv", index=False)
 
     
 def save_pipeline(model, model_name, resolution="50km"):
@@ -428,102 +447,58 @@ def load_pipeline(model_name, parts_number=None, resolution="50km"):
     return load_large_model(f"{get_path("models_dir")}/{resolution}/{model_name}", parts_number)
 
 
-def main():
-    # Example usage
-    for resolution in ["50km"]:
-        print(f"\nResolution: {resolution}")
-        start_date = pd.to_datetime('2015-01-01').date()
-        end_date = pd.to_datetime('2022-02-23').date()
-        calib_date = pd.to_datetime('2021-02-23').date()
-        print("Loading data...")
-        static_data = DataLoader.load_static_data(resolution=resolution)
-        fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=resolution)
-        feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
-        time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
-        X_train, X_calib, y_train, y_calib, ids_train, ids_calib = feature_engineering.get_train_calibration_split(time_series_data, 
-                                                                                                                start_date_calib=calib_date)
-        print("Shape of the training data:", X_train.shape)
-        print("Shape of the calibration data:", X_calib.shape)
-        print("Number of NaN values in training data:", X_train.isna().sum().sum())
-        print("Number of NaN values in calibration data:", X_calib.isna().sum().sum())
-
-        pipeline = FirePredictionPipeline()
-        print("\nFitting the pipeline...")
-        pipeline.fit_rf(X_train, y_train)
-        print("Random forest model fitted successfully.")
-        pipeline.fit_threshold(X_calib, y_calib)
-        print("Threshold fitted successfully.")
-        pipeline.fit_explainer(X_train, X_train.columns)
-        print("Explainer model fitted successfully.")
-        print("Pipeline fitted successfully.")
-        print("Pipeline: ", pipeline.pipeline.steps)
-
-        X_test, y_test, ids_test = feature_engineering.get_test_data(time_series_data[time_series_data['ACQ_DATE'] >= calib_date])
-        y_pred_decay, y_scores_decay, y_pred, y_scores = pipeline.predict(X_test, y_test, ids_test)
-        print("\nPredictions and scores calculated successfully.")
-        pipeline.save_predictions_to_csv(fire_data[fire_data["ACQ_DATE"] >= calib_date], 
-                                        y_pred_decay, y_scores_decay, y_pred, y_scores, ids_test, 
-                                        f"results/{resolution}/calibration_predictions.csv")
-        print("Prediction results saved successfully.")
-
-        pipeline.fit_onn(X_train, y_train, ids_train)
-        print("\nOne Nearest Neighbor model fitted successfully.")
-        X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test.iloc[:400000], 
-                                                                                        ids_test.iloc[:400000])
-        print("Nearest neighbors calculated successfully.")
-        pipeline.save_nn_results(X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays, X_train.columns, 
-                                f"results/{resolution}/calibration")
-        print("Nearest neighbors results saved successfully.")
-        X_test['FIRE_COUNT_CELL'] = y_test
-        X_test.iloc[:400000].to_csv(f"results/{resolution}/calibration_data.csv", index=False)
-        print("Calibration data saved successfully.")
-
-        save_pipeline(pipeline, "pipeline", resolution=resolution)
-        print("\nPipeline saved successfully.")
-        pipeline_loaded = load_pipeline("pipeline", resolution=resolution)
-        print("Pipeline loaded successfully.")
-        print("Pipeline: ", pipeline_loaded.pipeline.steps)
-
-        # Test the model on a new dataset
-        start_date = pd.to_datetime('2022-02-24').date()
-        end_date = pd.to_datetime('2024-09-30').date()
-        print("\nLoading test data...")
-        static_data = DataLoader.load_static_data(resolution=resolution)
-        fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=resolution)
-        feature_engineering = FeatureEngineering(start_date=start_date, end_date=end_date)
-        time_series_data = feature_engineering.transform(fire_data, static_data, weather_data)
-        X_test, y_test, ids_test = feature_engineering.get_test_data(time_series_data)
-        print("Shape of the test data:", X_test.shape)
-        print("Number of NaN values in test data:", X_test.isna().sum().sum())
-
-        y_pred_decay, y_scores_decay, y_pred, y_scores = pipeline.predict(X_test, y_test, ids_test)
-        print("Predictions and scores calculated successfully.")
-        pipeline.save_predictions_to_csv(fire_data, y_pred_decay, y_scores_decay, y_pred, y_scores, ids_test, 
-                                        f"results/{resolution}/test_predictions.csv")
-        print("Prediction results saved successfully.")
-        
-        X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays = pipeline.get_onn(X_test.iloc[:400000], 
-                                                                                        ids_test.iloc[:400000])
-        print("Nearest neighbors calculated successfully.")
-        pipeline.save_nn_results(X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays, X_train.columns, 
-                                f"results/{resolution}/test")
-        print("Nearest neighbors results saved successfully.")
-        X_test_copy = X_test.copy()
-        X_test_copy['FIRE_COUNT_CELL'] = y_test
-        X_test_copy.iloc[:400000].to_csv(f"results/{resolution}/test_data.csv", index=False)
-        print("Test data saved successfully.")
-
-        # Get an explanation for a single instance
-        idx_instance = 2000
-        instance = X_test.iloc[idx_instance]
-        exp = pipeline.get_explanation(instance.values)
-        pipeline.save_explanation_instance(exp, f"results/{resolution}/plots/explanation_{idx_instance}")
-        print("Explanation instance generated successfully.")
-
-        # Explain the test data
-        X_test_subset = X_test.iloc[:1000].reset_index(drop=True)
-        explanations_df = pipeline.explain_data(X_test_subset, file_path=f"results/{resolution}/test_explanations.csv")
-        print("Explanations generated successfully.")
-
 if __name__ == "__main__":
-    main()
+    resolution = "50km"
+    start_date_train = pd.to_datetime('2015-01-01').date()
+    end_date_train = pd.to_datetime('2021-02-23').date()
+    start_date_calib = pd.to_datetime('2021-02-24').date()
+    end_date_calib = pd.to_datetime('2022-02-23').date()
+    start_date_test = pd.to_datetime('2022-02-24').date()
+    end_date_test = pd.to_datetime('2024-09-30').date()
+
+    data_pipeline = DataPipeline(resolution=resolution)
+    X_train, y_train, ids_train, fires_train = data_pipeline.fit_transform(start_date=start_date_train, end_date=end_date_train)
+    X_calib, y_calib, ids_calib, fires_calib = data_pipeline.transform(start_date=start_date_calib, end_date=end_date_calib)
+    X_test, y_test, ids_test, fires_test = data_pipeline.transform(start_date=start_date_test, end_date=end_date_test)
+    print("Data loaded successfully.")
+    print("X_train shape:", X_train.shape)
+    print("X_calib shape:", X_calib.shape)
+    print("X_test shape:", X_test.shape)
+
+    save_large_model(data_pipeline, f"{get_path('models_dir')}/{resolution}/data_pipeline", part_size=90)
+    print("Data pipeline saved successfully!")
+    data_pipeline_loaded = load_large_model(f"{get_path('models_dir')}/{resolution}/data_pipeline")
+    print("Data pipeline loaded successfully!")
+
+    model_pipeline = FirePredictionPipeline()
+    print("Fitting the model pipeline...")
+    model_pipeline.fit(X_train, y_train, X_calib, y_calib, ids_train)
+    print("Model pipeline fitted successfully.")
+    print("Model pipeline: ", model_pipeline.pipeline.steps)
+
+    save_pipeline(model_pipeline, "model_pipeline", resolution=resolution)
+    print("Model pipeline saved successfully.")
+    model_pipeline_loaded = load_pipeline("model_pipeline", resolution=resolution)
+    print("Model pipeline loaded successfully.")
+    print("Model pipeline: ", model_pipeline_loaded.pipeline.steps)
+
+    y_pred = model_pipeline_loaded.predict(X_test, y_test, ids_test)
+    print("Test predictions and scores calculated successfully.")
+    model_pipeline_loaded.save_predictions_to_csv(y_pred, fires_test, ids_test, f"results/{resolution}/test_predictions.csv")
+    print("Test prediction results saved successfully.")
+    
+    onn_results = model_pipeline_loaded.get_onn(X_test.iloc[:400000], ids_test.iloc[:400000])
+    print("Nearest neighbors calculated successfully.")
+    model_pipeline_loaded.save_nn_results(onn_results, X_test, y_test, f"results/{resolution}/test")
+    print("Nearest neighbors results saved successfully.")
+
+    idx_instance = 2000
+    instance = X_test.iloc[idx_instance]
+    exp = model_pipeline_loaded.get_explanation(instance.values)
+    model_pipeline_loaded.save_explanation_instance(exp, f"results/{resolution}/plots/explanation_{idx_instance}")
+    print("Explanation instance generated successfully.")
+
+    # Explain the test data
+    X_test_subset = X_test.iloc[:1000].reset_index(drop=True)
+    explanations_df = model_pipeline_loaded.explain_data(X_test_subset, file_path=f"results/{resolution}/test_explanations.csv")
+    print("Explanations generated successfully.")
