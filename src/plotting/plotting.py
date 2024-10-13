@@ -37,6 +37,8 @@ class UkraineFirePlotting:
         A DataFrame containing war events in Ukraine with start and end dates.
     ukraine_borders : gpd.GeoDataFrame
         A GeoDataFrame containing the shapefile of Ukrainian borders.
+    rus_adv : gpd.GeoDataFrame
+        A GeoDataFrame containing the shapefile of Russian-occupied territories in Ukraine.
     
     Methods
     -------
@@ -85,8 +87,19 @@ class UkraineFirePlotting:
             print(f"Unexpected error while loading Ukrainian borders shapefile: {e}")
             self.ukraine_borders = gpd.GeoDataFrame()
 
+        try:
+            # Load Russian-occupied territories shapefile
+            self.rus_adv = gpd.read_file(get_path("rus_control_data_dir"))
+            self.rus_adv.to_crs(epsg=get_parameter('border_epsg'), inplace=True)
+        except FileNotFoundError:
+            print("Error: Russian-occupied territories shapefile not found.")
+            self.rus_adv = gpd.GeoDataFrame()
+        except Exception as e:
+            print(f"Unexpected error while loading Russian-occupied territories shapefile: {e}")
+            self.rus_adv = gpd.GeoDataFrame()
+
     def plot_fire_data(self, data, event='', start_date=None, end_date=None, colors=['red'], alphas=[0.25], legend=False,
-                       markersizes=[1], plot_cities=False, city_color='yellow', cmaps=None, column=None):
+                       markersizes=[1], plot_cities=False, city_color='yellow', cmaps=None, column=None, plot_rus_adv=False):
         """
         Plot fire data within Ukrainian borders.
 
@@ -117,6 +130,8 @@ class UkraineFirePlotting:
             If provided, the data points will be colored based on the values in the columns parameter.
         column : str, optional
             Column name to use for coloring the data points.
+        plot_rus_adv : bool, optional
+            Whether to plot Russian-occupied territories in Ukraine.
 
         Returns
         -------
@@ -132,6 +147,10 @@ class UkraineFirePlotting:
             # Create plot and plot Ukrainian borders
             _, ax = plt.subplots(figsize=(15, 9))
             self.ukraine_borders.plot(ax=ax, color='white', edgecolor='black')
+            # Plot Russian-occupied territories if specified
+            if plot_rus_adv:
+                self.rus_adv.boundary.plot(ax=ax, color='red', linewidth=1)
+                self.rus_adv.plot(ax=ax, color='none', edgecolor='red', hatch='//')
 
             vmin, vmax = 0, 0
             for i, df in enumerate(data):
@@ -169,8 +188,8 @@ class UkraineFirePlotting:
             # Add grid for context
             ax.grid(True, linestyle='--', linewidth=0.5, alpha=0.7)
             # Add grid titles
-            ax.set_xlabel('Östliche Länge')
-            ax.set_ylabel('Nördliche Breite')
+            ax.set_xlabel('Östliche Länge (°)')
+            ax.set_ylabel('Nördliche Breite (°)')
 
             # Add a colorbar if a column is specified for coloring
             if column and legend and cmaps:
@@ -283,10 +302,10 @@ if __name__ == "__main__":
             # Plot abnormal and normal fires
             plotting.plot_fire_data([normal_fires, abnormal_fires], event=event, start_date=start_date, end_date=end_date,
                                                colors=['black', 'red'], alphas=[0.05, 0.1], markersizes=[2, 4],
-                                               plot_cities=True, city_color='blue')
+                                               plot_cities=True, city_color='blue', plot_rus_adv=True)
             plotting.plot_fire_data([abnormal_fires], event=event, start_date=start_date, end_date=end_date,
                                                cmaps='Reds', alphas=[0.2], markersizes=[7], column='SIGNIFICANCE_SCORE_DECAY',
-                                               plot_cities=True, city_color='blue', legend=True)
+                                               plot_cities=True, city_color='blue', legend=True, plot_rus_adv=True)
             # Plot significance score histogram
             plotting.plot_histogram(normal_fires, abnormal_fires, start_date, end_date, event, column='SIGNIFICANCE_SCORE')
             plotting.plot_histogram(normal_fires, abnormal_fires, start_date, end_date, event, column='SIGNIFICANCE_SCORE_DECAY')
