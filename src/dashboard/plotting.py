@@ -117,6 +117,11 @@ class UkraineFirePlotting:
         column : str, optional
             Column name to use for coloring the data points.
 
+        Returns
+        -------
+        str
+            The path to the saved plot.
+
         Raises
         ------
         Exception
@@ -179,15 +184,17 @@ class UkraineFirePlotting:
             dpi=500
             if start_date and end_date:
                 if column:
-                    plt.savefig(os.path.join(output_dir, f"{start_date}_{end_date}_{column}.png"), dpi=dpi)
+                    file_path = os.path.join(output_dir, f"{start_date}_{end_date}_{column}.png")
                 else:
-                    plt.savefig(os.path.join(output_dir, f"{start_date}_{end_date}.png"), dpi=dpi)
+                    file_path = os.path.join(output_dir, f"{start_date}_{end_date}.png")
             else:
                 if column:
-                    plt.savefig(os.path.join(output_dir, f"{event}_{column}.png"), dpi=dpi)
+                    file_path = os.path.join(output_dir, f"{event}_{column}.png")
                 else:
-                    plt.savefig(os.path.join(output_dir, f"{event}.png"), dpi=dpi)
+                    file_path = os.path.join(output_dir, f"{event}.png")
+            plt.savefig(file_path, dpi=dpi)
             # plt.show()
+            return file_path
         except Exception as e:
             print(f"Error while plotting fire data: {e}")
 
@@ -209,6 +216,11 @@ class UkraineFirePlotting:
             Text description for the event.
         column : str
             Column name to use for plotting the histogram.
+
+        Returns
+        -------
+        str
+            The path to the saved histogram plot.
 
         Raises
         ------
@@ -243,8 +255,12 @@ class UkraineFirePlotting:
             plt.suptitle(f"{event}\n({start_date} bis {end_date})", fontsize=16, weight='bold')
             plt.tight_layout()
             output_dir = get_path("output_plots_dir")
-            plt.savefig(os.path.join(output_dir, f"{start_date}_{end_date}_{column}_histogram.png"), dpi=500)
+            file_path = os.path.join(output_dir, f"{start_date}_{end_date}_{column}_histogram.png")
+            plt.savefig(file_path, dpi=500)
             # plt.show()
+
+            # Return the path to the saved file
+            return file_path
         except Exception as e:
             print(f"Error while plotting histogram: {e}")
 
