@@ -4,6 +4,7 @@ import geopandas as gpd
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
+from matplotlib.colors import ListedColormap
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -313,9 +314,13 @@ if __name__ == "__main__":
                 'LAND_USE_CLASS_3': 3,
                 'LAND_USE_CLASS_4': 4
             }
+            # Create a custom color map
+            custom_cmap = ListedColormap(['darkblue', 'green', 'brown', 'orange', 'red'])
+
+            # Apply the custom color map to the plotting function
             land_use_data['LAND_USE_CLASS'] = land_use_data[['LAND_USE_CLASS_0', 'LAND_USE_CLASS_1', 'LAND_USE_CLASS_2', 
-                                                             'LAND_USE_CLASS_3', 'LAND_USE_CLASS_4']].idxmax(axis=1).map(land_use_class_mapping)
-            plotting.plot_fire_data([land_use_data], event='Landnutzung in der Ukraine', cmaps='tab10', alphas=[0.25], 
+                                                                'LAND_USE_CLASS_3', 'LAND_USE_CLASS_4']].idxmax(axis=1).map(land_use_class_mapping)
+            plotting.plot_fire_data([land_use_data], event='Landnutzung in der Ukraine', cmaps=custom_cmap, alphas=[0.25], 
                                     markersizes=[1], column='LAND_USE_CLASS', legend=True, plot_cities=True, city_color='red')
             print("Plotted land use in Ukraine 1km resolution")
         except FileNotFoundError:
