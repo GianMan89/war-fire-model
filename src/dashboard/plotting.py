@@ -194,6 +194,7 @@ class UkraineFirePlotting:
                     file_path = os.path.join(output_dir, f"{event}.png")
             plt.savefig(file_path, dpi=dpi)
             # plt.show()
+            plt.close()
             return file_path
         except Exception as e:
             print(f"Error while plotting fire data: {e}")
@@ -258,7 +259,7 @@ class UkraineFirePlotting:
             file_path = os.path.join(output_dir, f"{start_date}_{end_date}_{column}_histogram.png")
             plt.savefig(file_path, dpi=500)
             # plt.show()
-
+            plt.close()
             # Return the path to the saved file
             return file_path
         except Exception as e:
