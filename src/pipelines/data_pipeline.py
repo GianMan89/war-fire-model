@@ -1,210 +1,159 @@
 import os
 import sys
 import pandas as pd
-from sklearn.impute import KNNImputer
-from sklearn.base import BaseEstimator, TransformerMixin
 
 import warnings
 warnings.filterwarnings("ignore")
 
 # Add the project root to the Python path
-current_path = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_path, '../../'))  # Adjust based on depth
-sys.path.append(project_root)
+try:
+    current_path = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_path, '../../'))  # Adjust based on depth
+    sys.path.append(project_root)
+except Exception as e:
+    raise RuntimeError(f"Failed to set up the project root: {str(e)}")
 
 from src.preprocessing.load_data import DataLoader
 from src.preprocessing.feature_engineering import FeatureEngineering
-from utils.file_utils import get_path, save_large_model, load_large_model
+from utils.data_utils import force_datetime
 
-class DataHandler(BaseEstimator, TransformerMixin):
-    """"
-    DataHandler is a custom transformer for handling and processing data for the war-fire model.
-    
+class DataPipeline:
+    """
+    A class to handle the data pipeline for loading, transforming, and engineering features 
+    for fire data analysis.
+
     Parameters
     ----------
-    resolution : str, default='50km'
-        The spatial resolution for loading static and dynamic data.
+    resolution : str, optional (default='50km')
+        The resolution of the static data to be loaded.
     
     Attributes
     ----------
     resolution : str
-        The spatial resolution for loading static and dynamic data.
+        The resolution of the static data.
     feature_engineering : FeatureEngineering
-        An instance of the FeatureEngineering class for transforming the data.
-    static_data : Any
+        An instance of the FeatureEngineering class for transforming data.
+    static_data : any
         The static data loaded based on the specified resolution.
     
     Methods
     -------
-    fit(X=None, y=None)
-        Loads static data based on the specified resolution.
-    transform(X=None, y=None, start_date='2015-01-01', end_date='2022-02-23')
-        Loads dynamic data for the given date range and applies feature engineering to transform the data.
-    fit_transform(X=None, y=None, start_date='2015-01-01', end_date='2022-02-23')
-        Fits the transformer to the data and transforms the data.
+    fit()
+    transform(start_date='2015-01-01', end_date='2022-02-23')
+    fit_transform(start_date='2015-01-01', end_date='2022-02-23')
     """
+    
     def __init__(self, resolution='50km'):
         self.resolution = resolution
         self.feature_engineering = FeatureEngineering()
         self.static_data = None
 
-    def fit(self, X=None, y=None):
-        self.static_data = DataLoader.load_static_data(resolution=self.resolution)
-        return self
+    def fit(self):
+        """
+        Fit the data pipeline by loading static data.
+        This method attempts to load static data based on the specified resolution.
+        If the data loading fails, it raises a RuntimeError with the error message.
+        
+        Returns
+        -------
+        self : object
+            Returns the instance itself.
+        
+        Raises
+        ------
+        RuntimeError
+            If loading static data fails.
+        """
 
-    def transform(self, X=None, y=None, start_date='2015-01-01', end_date='2022-02-23'):
-        fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=self.resolution)
-        X, y, ids = self.feature_engineering.transform(fire_data, self.static_data, weather_data, start_date=start_date, 
-                                                       end_date=end_date)
-        return X, y, ids, fire_data
-    
-    def fit_transform(self, X=None, y=None, start_date='2015-01-01', end_date='2022-02-23'):
-        self.fit(X, y)
-        return self.transform(X, y, start_date=start_date, end_date=end_date)
-
-class DataImputer(BaseEstimator, TransformerMixin):
-    """
-    DataImputer class to handle imputation of missing data.
-    Uses the KNNImputer, which imputes missing values in the data by finding 
-    the nearest neighbors with non-missing values.
-    
-    Attributes
-    ----------
-    strategy : str
-        The imputation strategy. Default is 'mean'.
-    
-    Methods
-    -------
-    fit(X, y=None)
-        Fits the imputer to the data.
-    transform(X)
-        Imputes missing values in the data.
-    fit_transform(X, y=None)
-        Fits the imputer to the data and imputes missing values.
-    """
-    def __init__(self, strategy='mean'):
-        self.strategy = strategy
-        self.imputer = KNNImputer(n_neighbors=1)
-
-    def fit(self, X, y=None):
-        self.imputer.fit(X)
-        return self
-
-    def transform(self, X):
-        return pd.DataFrame(self.imputer.transform(X), columns=X.columns, index=X.index)
-    
-    def fit_transform(self, X, y=None):
-        self.fit(X, y)
-        return self.transform(X)
-    
-class DataPipeline:
-    """
-    DataPipeline class to handle the entire data processing pipeline.
-    
-    Attributes
-    ----------
-    resolution : str
-        The resolution of the data files to be loaded.
-    
-    Methods
-    -------
-    fit(start_date='2015-01-01', end_date='2022-02-23')
-        Fits the data handler and imputer to the data.
-    transform(start_date='2015-01-01', end_date='2022-02-23')
-        Transforms the data using the data handler and imputer.
-    fit_transform(start_date='2015-01-01', end_date='2022-02-23')
-        Fits the data handler and imputer to the data and transforms the data.
-    """
-    def __init__(self, resolution='50km'):
-        self.resolution = resolution
-        self.data_handler = DataHandler(resolution=resolution)
-        self.imputer = DataImputer(strategy='mean')
-
-    def fit(self, start_date='2015-01-01', end_date='2022-02-23'):
-        start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
-        data, _, _, _ = self.data_handler.fit_transform(X=None, y=None, start_date=start_date, end_date=end_date)
-        self.imputer.fit(data)
+        try:
+            # Load static data based on the specified resolution
+            self.static_data = DataLoader.load_static_data(resolution=self.resolution)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load static data: {str(e)}")
         return self
 
     def transform(self, start_date='2015-01-01', end_date='2022-02-23'):
-        start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
-        X, y, ids, fire_data = self.data_handler.transform(X=None, y=None, start_date=start_date, end_date=end_date)
-        X_imputed = self.imputer.transform(X)
-        return X_imputed, y, ids, fire_data
+        """
+        Transforms the data within the specified date range by loading dynamic data,
+        applying feature engineering, and returning the transformed features and labels.
+        
+        Parameters
+        ----------
+        start_date : str, optional
+            The start date for the data transformation in 'YYYY-MM-DD' format. Default is '2015-01-01'.
+        end_date : str, optional
+            The end date for the data transformation in 'YYYY-MM-DD' format. Default is '2022-02-23'.
+        
+        Returns
+        -------
+        X : array-like
+            The transformed feature matrix.
+        y : array-like
+            The target labels.
+        ids : array-like
+            The identifiers for the data points.
+        fire_data : DataFrame
+            The raw fire data loaded for the given date range.
+        
+        Raises
+        ------
+        RuntimeError
+            If there is an error during the data transformation process.
+        """
+
+        try:
+            start_date, end_date = force_datetime(start_date), force_datetime(end_date)
+            # Load dynamic data for the given date range
+            fire_data, weather_data = DataLoader.load_dynamic_data(start_date=start_date, end_date=end_date, resolution=self.resolution)
+            # Apply feature engineering to transform the data
+            X, y, ids = self.feature_engineering.transform(fire_data, self.static_data, weather_data, start_date=start_date, 
+                                                           end_date=end_date)
+        except Exception as e:
+            raise RuntimeError(f"Failed to transform data: {str(e)}")
+        return X, y, ids, fire_data
     
     def fit_transform(self, start_date='2015-01-01', end_date='2022-02-23'):
-        start_date, end_date = self.force_datetime(start_date), self.force_datetime(end_date)
-        self.fit(start_date=start_date, end_date=end_date)
+        """
+        Fit the model and then transform the data within the specified date range.
+        
+        Parameters
+        ----------
+        start_date : str, optional
+            The start date for the data transformation in 'YYYY-MM-DD' format. Default is '2015-01-01'.
+        end_date : str, optional
+            The end date for the data transformation in 'YYYY-MM-DD' format. Default is '2022-02-23'.
+        
+        Returns
+        -------
+        transformed_data : any
+            The transformed data within the specified date range.
+        """
+
+        self.fit()
         return self.transform(start_date=start_date, end_date=end_date)
-    
-    @staticmethod
-    def force_datetime(date):
-        return pd.to_datetime(date).date()
 
-def save_pipeline(model, model_name, resolution="50km"):
-    """
-    Save the model to disk in multiple parts.
-    This method saves the model to the directory specified by the
-    `models_dir` path and `model_name`. The model is split into multiple parts, each with
-    a maximum size of 90 MB.
-
-    Parameters
-    -------
-    model : object
-        The model to be saved.
-    model_name : str
-        The name of the model to be saved.
-    resolution : str
-        The resolution used. Default is "50km".
-    
-    Returns
-    -------
-    None
-    """
-
-    _ = save_large_model(model, f"{get_path("models_dir")}/{resolution}/{model_name}", part_size=90)
-
-def load_pipeline(model_name, parts_number=None, resolution="50km"):
-    """
-    Load the saved model.
-    This method loads a previously saved model from the specified directory.
-    The model is loaded in parts if `parts_number` is specified.
-
-    Parameters
-    ------
-    model_name : str
-        The name of the model to be loaded.
-    parts_number : int
-        The number of parts the model was split into during saving. If not provided, 
-        the method will attempt to infer the number of parts based on the files in the directory.
-        Defaults to None.
-    resolution : str
-        The resolution used. Default is "50km".
-    """
-
-    return load_large_model(f"{get_path("models_dir")}/{resolution}/{model_name}", parts_number)
 
 if __name__ == "__main__":
-    resolution = "50km"
-    start_date = '2020-01-01'
-    end_date = '2022-12-31'
-    
-    pipeline = DataPipeline(resolution=resolution)
-    X, y, ids, fires = pipeline.fit_transform(start_date=start_date, end_date=end_date)
-    print("X shape:", X.shape)
-    print("y shape:", y.shape)
-    print("ids shape:", ids.shape)
-    print("fires shape:", fires.shape)
-
-    save_large_model(pipeline, f"{get_path('models_dir')}/{resolution}/data_pipeline", part_size=90)
-    print("Pipeline saved successfully!")
-    pipeline_loaded = load_large_model(f"{get_path('models_dir')}/{resolution}/data_pipeline")
-    print("Pipeline loaded successfully!")
-    
-    start_date = '2023-01-01'
-    end_date = '2023-12-31'
-    X, y, ids, fires = pipeline_loaded.transform(start_date=start_date, end_date=end_date)
-    print("X shape:", X.shape)
-    print("y shape:", y.shape)
-    print("ids shape:", ids.shape)
-    print("fires shape:", fires.shape)
+    try:
+        resolution = "50km"
+        start_date = '2020-01-01'
+        end_date = '2022-12-31'
+        
+        # Initialize and fit-transform the data pipeline
+        pipeline = DataPipeline(resolution=resolution)
+        X, y, ids, fires = pipeline.fit_transform(start_date=start_date, end_date=end_date)
+        print("X shape:", X.shape)
+        print("y shape:", y.shape)
+        print("ids shape:", ids.shape)
+        print("fires shape:", fires.shape)
+        
+        # Transform data with the loaded pipeline
+        start_date = '2023-01-01'
+        end_date = '2023-12-31'
+        X, y, ids, fires = pipeline.transform(start_date=start_date, end_date=end_date)
+        print("X shape:", X.shape)
+        print("y shape:", y.shape)
+        print("ids shape:", ids.shape)
+        print("fires shape:", fires.shape)
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
