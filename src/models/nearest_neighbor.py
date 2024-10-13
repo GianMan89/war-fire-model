@@ -25,14 +25,10 @@ class OneNearestNeighborModel:
     ----------
     scaler : StandardScaler
         Scaler used to standardize the features.
-    nearest_neighbors_nofiredays : dict
-        Dictionary storing nearest neighbors models for all days, keyed by grid cell.
-    nearest_neighbors_firedays : dict
-        Dictionary storing nearest neighbors models for fire days, keyed by grid cell.
-    ids_nofiredays : DataFrame
-        DataFrame containing the 'GRID_CELL' information for all days.
-    ids_firedays : DataFrame
-        DataFrame containing the 'GRID_CELL' information for fire days.
+    nearest_neighbors_nofiredays : sklearn.neighbors.NearestNeighbors
+        NearestNeighbors model for non-fire days.
+    nearest_neighbors_firedays : sklearn.neighbors.NearestNeighbors
+        NearestNeighbors model for fire days.
     X_firedays : array-like of shape (n_samples, n_features)
         Scaled input samples for fire days.
     X_nofiredays : array-like of shape (n_samples, n_features)
@@ -51,16 +47,14 @@ class OneNearestNeighborModel:
 
     def __init__(self):
         self.scaler = None
-        self.nearest_neighbors_nofiredays = {}
-        self.nearest_neighbors_firedays = {}
-        self.ids_nofiredays = None
-        self.ids_firedays = None
+        self.nearest_neighbors_nofiredays = None
+        self.nearest_neighbors_firedays = None
         self.X_firedays = None
         self.X_nofiredays = None
         self.y_firedays = None
         self.y_nofiredays = None
 
-    def fit(self, X, y, ids):
+    def fit(self, X, y):
         """
         Fit the model using the provided data.
 
@@ -70,8 +64,6 @@ class OneNearestNeighborModel:
             The input samples.
         y : array-like of shape (n_samples,)
             The target values (fire days and non-fire days).
-        ids : DataFrame
-            DataFrame containing the 'GRID_CELL' column which identifies the grid cell for each sample.
         
         Returns
         -------
@@ -89,8 +81,6 @@ class OneNearestNeighborModel:
             self.X_nofiredays = X[y == 0]
             self.y_firedays = y[y > 0]
             self.y_nofiredays = y[y == 0]
-            self.ids_firedays = ids[y > 0]
-            self.ids_nofiredays = ids[y == 0]
 
             # Standardize the features using StandardScaler
             self.scaler = StandardScaler()
@@ -98,28 +88,16 @@ class OneNearestNeighborModel:
             X_scaled_firedays = X_scaled[y > 0]
             X_scaled_nofiredays = X_scaled[y == 0]
 
-            # Fit nearest neighbors model for each grid cell
-            for grid_cell in ids['GRID_CELL'].unique():
-                indices_firedays = self.ids_firedays['GRID_CELL'][self.ids_firedays['GRID_CELL'] == grid_cell].index
-                indices_nofiredays = self.ids_nofiredays['GRID_CELL'][self.ids_nofiredays['GRID_CELL'] == grid_cell].index
-                
-                # Handle the case where there are no fire days or no non-fire days for a grid cell
-                if len(indices_firedays) == 0:
-                    self.nearest_neighbors_firedays[grid_cell] = None
-                else:
-                    self.nearest_neighbors_firedays[grid_cell] = self.fit_nn(X_scaled_firedays.loc[indices_firedays])
-
-                if len(indices_nofiredays) == 0:
-                    self.nearest_neighbors_nofiredays[grid_cell] = None
-                else:
-                    self.nearest_neighbors_nofiredays[grid_cell] = self.fit_nn(X_scaled_nofiredays.loc[indices_nofiredays])
+            # Fit nearest neighbors model
+            self.nearest_neighbors_firedays = self.fit_nn(X_scaled_firedays) 
+            self.nearest_neighbors_nofiredays = self.fit_nn(X_scaled_nofiredays)
         
         except Exception as e:
             print(f"Error during fitting the model: {e}")
         
         return self
 
-    def transform(self, X, ids):
+    def transform(self, X):
         """
         Transform the input data by scaling and finding nearest neighbors.
 
@@ -127,19 +105,17 @@ class OneNearestNeighborModel:
         ----------
         X : pandas.DataFrame
             The input features to be transformed.
-        ids : pandas.DataFrame
-            DataFrame containing the 'GRID_CELL' information for each sample in X.
         
         Returns
         -------
-        X_nn_firedays : list of pandas.DataFrame
-            List of DataFrames containing the nearest neighbors for fire days for each sample in X.
-        X_nn_nofiredays : list of pandas.DataFrame
-            List of DataFrames containing the nearest neighbors for all days for each sample in X.
-        y_nn_firedays : list of pandas.DataFrame
-            List of DataFrames containing the target values for the nearest neighbors for fire days.
-        y_nn_nofiredays : list of pandas.DataFrame
-            List of DataFrames containing the target values for the nearest neighbors for all days.
+        X_nn_firedays : pandas.DataFrame
+            DataFrame containing the nearest neighbors for all fire days for each sample in X.
+        X_nn_nofiredays : pandas.DataFrame
+            DataFrame containing the nearest neighbors for all days for each sample in X.
+        y_nn_firedays : pandas.DataFrame
+            DataFrame containing the target values for the nearest neighbors for all fire days.
+        y_nn_nofiredays : pandas.DataFrame
+            DataFrame containing the target values for the nearest neighbors for all days.
 
         Raises
         ------
@@ -154,30 +130,25 @@ class OneNearestNeighborModel:
             y_nn_firedays = np.zeros(X_scaled.shape[0])
             y_nn_nofiredays = np.zeros(X_scaled.shape[0])
 
-            # Iterate over unique grid cells
-            unique_grid_cells = ids['GRID_CELL'].unique()
-            for grid_cell in unique_grid_cells:
-                # Select relevant test samples for the current grid cell
-                indices = ids[ids['GRID_CELL'] == grid_cell].index
-                X_group = X_scaled.loc[indices]
+            # Get the nearest neighbors
+            _, nn_firedays = self.nearest_neighbors_firedays.kneighbors(X_scaled)
+            X_nn_firedays = self.X_firedays.iloc[nn_firedays.flatten()]
+            y_nn_firedays = self.y_firedays.iloc[nn_firedays.flatten()]
 
-                # Get the nearest neighbors for the current group of samples
-                nn_firedays_model = self.nearest_neighbors_firedays.get(grid_cell)
-                nn_nofiredays_model = self.nearest_neighbors_nofiredays.get(grid_cell)
-
-                # Check if nearest neighbors model exists for the grid cell
-                if nn_firedays_model is not None:
-                    _, nn_firedays = nn_firedays_model.kneighbors(X_group.values)
-                    X_nn_firedays[indices] = self.X_firedays.iloc[nn_firedays.flatten()]
-                    y_nn_firedays[indices] = self.y_firedays.iloc[nn_firedays.flatten()]
-
-                if nn_nofiredays_model is not None:
-                    _, nn_nofiredays = nn_nofiredays_model.kneighbors(X_group.values)
-                    X_nn_nofiredays[indices] = self.X_nofiredays.iloc[nn_nofiredays.flatten()]
-                    y_nn_nofiredays[indices] = self.y_nofiredays.iloc[nn_nofiredays.flatten()]
+            _, nn_nofiredays = self.nearest_neighbors_nofiredays.kneighbors(X_scaled)
+            X_nn_nofiredays = self.X_nofiredays.iloc[nn_nofiredays.flatten()]
+            y_nn_nofiredays = self.y_nofiredays.iloc[nn_nofiredays.flatten()]
 
         except Exception as e:
             print(f"Error during transforming the data: {e}")
+
+        # Reset the index of the DataFrames and rename the columns
+        X_nn_firedays = X_nn_firedays.reset_index(drop=True)
+        X_nn_nofiredays = X_nn_nofiredays.reset_index(drop=True)
+        y_nn_firedays = y_nn_firedays.reset_index(drop=True)
+        y_nn_nofiredays = y_nn_nofiredays.reset_index(drop=True)
+        y_nn_firedays.columns = ['FIRE_COUNT_CELL']
+        y_nn_nofiredays.columns = ['FIRE_COUNT_CELL']
 
         return X_nn_firedays, X_nn_nofiredays, y_nn_firedays, y_nn_nofiredays
 
@@ -209,3 +180,33 @@ class OneNearestNeighborModel:
         except Exception as e:
             print(f"Error during fitting NearestNeighbors model: {e}")
             return None
+
+
+if __name__ == "__main__":
+    # Example data
+    data = {
+        'feature1': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        'feature2': [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+    }
+    target = [0, 0, 0, 1, 1, 0, 0, 1, 1, 0]
+
+    # Convert to DataFrame
+    X = pd.DataFrame(data)
+    y = pd.Series(target)
+
+    # Initialize and fit the model
+    model = OneNearestNeighborModel()
+    model.fit(X, y)
+
+    # Transform the data
+    X_nn_firedays_df, X_nn_nofiredays_df, y_nn_firedays_df, y_nn_nofiredays_df = model.transform(X)
+
+    # Print the results
+    print("Nearest neighbors for fire days (features):")
+    print(X_nn_firedays_df)
+    print("\nNearest neighbors for non-fire days (features):")
+    print(X_nn_nofiredays_df)
+    print("\nNearest neighbors for fire days (target):")
+    print(y_nn_firedays_df)
+    print("\nNearest neighbors for non-fire days (target):")
+    print(y_nn_nofiredays_df)
