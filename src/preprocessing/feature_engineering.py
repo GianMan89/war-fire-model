@@ -13,7 +13,11 @@ try:
 except Exception as e:
     raise RuntimeError(f"Failed to add project root to Python path: {e}")
 
-from utils.data_utils import force_datetime
+try:
+    from utils.data_utils import force_datetime
+except ImportError as e:
+    print(f"Error importing custom modules: {e}")
+    sys.exit(1)
 
 class FeatureEngineering:
     """

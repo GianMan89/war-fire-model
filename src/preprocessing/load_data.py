@@ -14,9 +14,13 @@ try:
 except Exception as e:
     raise RuntimeError(f"Failed to add project root to Python path: {e}")
 
-from utils.file_utils import get_path
-from config.config import get_parameter
-from utils.data_utils import round_lat_lon, force_datetime
+try:
+    from utils.file_utils import get_path
+    from config.config import get_parameter
+    from utils.data_utils import round_lat_lon, force_datetime
+except ImportError as e:
+    print(f"Error importing custom modules: {e}")
+    sys.exit(1)
 
 class DataLoader:
     """

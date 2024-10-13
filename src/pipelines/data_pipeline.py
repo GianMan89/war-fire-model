@@ -13,9 +13,13 @@ try:
 except Exception as e:
     raise RuntimeError(f"Failed to set up the project root: {str(e)}")
 
-from src.preprocessing.load_data import DataLoader
-from src.preprocessing.feature_engineering import FeatureEngineering
-from utils.data_utils import force_datetime
+try:
+    from src.preprocessing.load_data import DataLoader
+    from src.preprocessing.feature_engineering import FeatureEngineering
+    from utils.data_utils import force_datetime
+except ImportError as e:
+    print(f"Error importing custom modules: {e}")
+    sys.exit(1)
 
 class DataPipeline:
     """
