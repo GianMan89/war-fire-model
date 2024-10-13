@@ -164,7 +164,7 @@ class FirePredictionPipeline:
             print(f"Error fitting threshold step: {e}")
             raise
 
-    def fit_onn(self, X_train, y_train, ids_train):
+    def fit_onn(self, X_train, y_train):
         """
         Fit the One Nearest Neighbor model using the training data.
 
@@ -174,8 +174,6 @@ class FirePredictionPipeline:
             The training input samples.
         y_train : array-like of shape (n_samples,)
             The target values (class labels in classification, real numbers in regression).
-        ids_train : DataFrame
-            DataFrame containing the 'GRID_CELL' column which identifies the grid cell for each sample.
         
         Returns
         -------
@@ -187,7 +185,7 @@ class FirePredictionPipeline:
             If an error occurs during the fitting process.
         """
         try:
-            self.onn_model.fit(X_train, y_train, ids_train)
+            self.onn_model.fit(X_train, y_train)
             self.onn_fitted = True
         except Exception as e:
             print(f"Error fitting One Nearest Neighbor model: {e}")
@@ -220,7 +218,7 @@ class FirePredictionPipeline:
             print(f"Error fitting explainer model: {e}")
             raise
 
-    def fit(self, X_train, y_train, X_calib, y_calib, ids_train):
+    def fit(self, X_train, y_train, X_calib, y_calib):
         """
         Fit the pipeline using the training and calibration data.
 
@@ -234,8 +232,6 @@ class FirePredictionPipeline:
             The calibration input samples.
         y_calib : array-like of shape (n_samples,)
             The target values for the calibration data.
-        ids_train : DataFrame
-            DataFrame containing 'ACQ_DATE' and 'GRID_CELL' columns for training.
         
         Returns
         -------
@@ -251,7 +247,7 @@ class FirePredictionPipeline:
         try:
             self.fit_rf(X_train, y_train)
             self.fit_threshold(X_calib, y_calib)
-            self.fit_onn(X_train, y_train, ids_train)
+            self.fit_onn(X_train, y_train)
             self.fit_explainer(X_train, X_train.columns)
         except ValueError as e:
             print(f"Value error during fitting: {e}")
@@ -305,7 +301,7 @@ class FirePredictionPipeline:
             print(f"Error during prediction: {e}")
             raise
     
-    def get_onn(self, X, ids):
+    def get_onn(self, X):
         """
         Get the One Nearest Neighbor model predictions for the input data.
 
@@ -313,19 +309,17 @@ class FirePredictionPipeline:
         ----------
         X : array-like of shape (n_samples, n_features)
             The input samples.
-        ids : DataFrame
-            DataFrame containing the 'GRID_CELL' column which identifies the grid cell for each sample.
         
         Returns
         -------
-        X_nn_firedays : list of pandas.DataFrame
-            List of DataFrames containing the nearest neighbors for fire days for each sample in X.
-        X_nn_nofiredays : list of pandas.DataFrame
-            List of DataFrames containing the nearest neighbors for all days for each sample in X.
-        y_nn_firedays : list of pandas.DataFrame
-            List of DataFrames containing the target values for the nearest neighbors for fire days.
-        y_nn_nofiredays : list of pandas.DataFrame
-            List of DataFrames containing the target values for the nearest neighbors for all days.
+         X_nn_firedays : pandas.DataFrame
+            DataFrame containing the nearest neighbors for all fire days for each sample in X.
+        X_nn_nofiredays : pandas.DataFrame
+            DataFrame containing the nearest neighbors for all days for each sample in X.
+        y_nn_firedays : pandas.DataFrame
+            DataFrame containing the target values for the nearest neighbors for all fire days.
+        y_nn_nofiredays : pandas.DataFrame
+            DataFrame containing the target values for the nearest neighbors for all days.
         
         Raises
         ------
@@ -337,7 +331,7 @@ class FirePredictionPipeline:
         if not self.onn_fitted:
             raise ValueError("One Nearest Neighbor model must be fitted first.")
         try:
-            return self.onn_model.transform(X, ids)
+            return self.onn_model.transform(X)
         except Exception as e:
             print(f"Error getting One Nearest Neighbor predictions: {e}")
             raise
@@ -607,7 +601,7 @@ if __name__ == "__main__":
         # Initialize and fit the FirePredictionPipeline
         model_pipeline = FirePredictionPipeline()
         print("Fitting the model pipeline...")
-        model_pipeline.fit(X_train, y_train, X_calib, y_calib, ids_train)
+        model_pipeline.fit(X_train, y_train, X_calib, y_calib)
         print("Model pipeline fitted successfully.")
 
         # Save and load the fitted model pipeline
@@ -623,20 +617,20 @@ if __name__ == "__main__":
         print("Test prediction results saved successfully.")
 
         # Calculate and save nearest neighbors
-        onn_results = model_pipeline_loaded.get_onn(X_test.iloc[:400000], ids_test.iloc[:400000])
+        onn_results = model_pipeline_loaded.get_onn(X_test.iloc[:10])
         print("Nearest neighbors calculated successfully.")
         model_pipeline_loaded.save_nn_results(onn_results, X_test, y_test, f"results/{resolution}/test")
         print("Nearest neighbors results saved successfully.")
 
         # Generate and save explanation for a single instance
-        idx_instance = 2000
+        idx_instance = 0
         instance = X_test.iloc[idx_instance]
         exp = model_pipeline_loaded.get_explanation(instance.values)
         model_pipeline_loaded.save_explanation_instance(exp, f"results/{resolution}/plots/explanation_{idx_instance}")
         print("Explanation instance generated successfully.")
 
         # Explain the test data subset
-        X_test_subset = X_test.iloc[:1000].reset_index(drop=True)
+        X_test_subset = X_test.iloc[:10].reset_index(drop=True)
         explanations_df = model_pipeline_loaded.explain_data(X_test_subset, file_path=f"results/{resolution}/test_explanations.csv")
         print("Explanations generated successfully.")
     except Exception as e:
