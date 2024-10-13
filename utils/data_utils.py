@@ -1,3 +1,5 @@
+import pandas as pd
+
 def round_lat_lon(lat, lon, resolution="50km"):
     """
     Rounds latitude and longitude to 1km, 10km, or 50km resolution.
@@ -69,6 +71,33 @@ def round_lat_lon(lat, lon, resolution="50km"):
     
     return rounded_lat, rounded_lon
 
+def force_datetime(date):
+    """
+    Convert the provided date to a datetime.date object.
+
+    Parameters
+    ----------
+    date : str, int, float, datetime-like, or list-like
+        The date to be converted. This can be a string, integer, float, 
+        datetime-like object, or a list-like object containing dates.
+    
+    Returns
+    -------
+    datetime.date
+        The converted date as a datetime.date object.
+    
+    Raises
+    ------
+    ValueError
+        If the provided date cannot be converted to a datetime.date object.
+    """
+
+    # Convert the provided date to datetime.date
+    try:
+        return pd.to_datetime(date).date()
+    except Exception as e:
+        raise ValueError(f"Invalid date format: {str(e)}")
+
 
 # Example usage
 if __name__ == "__main__":
@@ -78,3 +107,12 @@ if __name__ == "__main__":
         print("Rounded coordinates:", rounded_coords)
     except (TypeError, ValueError) as e:
         print("Error:", e)
+    
+    try:
+        date = '2023-01-01'
+        date = force_datetime(date)
+        print("Converted date:", date)
+    except ValueError as ve:
+        print(f"ValueError: {ve}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
