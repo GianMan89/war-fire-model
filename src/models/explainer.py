@@ -77,7 +77,11 @@ class LimeExplainer:
             if not isinstance(training_data, (np.ndarray, pd.DataFrame)):
                 raise ValueError("Training data must be a numpy array or pandas DataFrame.")
             if not isinstance(feature_names, list):
-                raise ValueError("Feature names must be a list.")
+                try:
+                    # Convert feature_names to a list if it's a pandas Index
+                    feature_names = list(feature_names)
+                except Exception:
+                    raise ValueError("Feature names cannot be converted to a list.")
             
             # Convert training_data to numpy array if it's a DataFrame
             training_data = np.array(training_data)
