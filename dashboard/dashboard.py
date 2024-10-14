@@ -1,5 +1,5 @@
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 import dash_leaflet as dl
 import pandas as pd
 import geopandas as gpd
@@ -61,28 +61,48 @@ app.layout = html.Div([
                 id='date-picker-range',
                 min_date_allowed=min_date,
                 max_date_allowed=max_date,
+                start_date_placeholder_text='DD.MM.YY',
+                end_date_placeholder_text='DD.MM.YY',
                 initial_visible_month=min_date,
+                number_of_months_shown=2,
                 start_date=min_date,
-                end_date=min_date + pd.DateOffset(months=1) - pd.DateOffset(days=1),
-                display_format='DD MMMM YYYY',
+                end_date=(min_date + pd.DateOffset(months=1) - pd.DateOffset(days=1)).date(),
+                display_format='DD.MM.YY',
                 clearable=False,
-                style={'width': '400px', 'font-size': '16px', 'display': 'inline-block', 'padding': '10px', 'box-shadow': '0px 2px 5px rgba(0, 0, 0, 0.1)', 'border-radius': '5px', 'zIndex': 3}
+                style={'width': '400px', 'font-size': '16px', 'display': 'inline-block', 'padding': '10px', 'box-shadow': '0px 2px 5px rgba(0, 0, 0, 0.1)', 'border-radius': '5px', 'zIndex': 3, 'fontSize': '12px'}
             ),
         ], style={"width": "30%", "margin": "auto", "position": "relative", "zIndex": 3}),
 
         html.Div(id='date-slider-labels', style={"text-align": "center", "margin-top": "10px", "font-size": "16px"}),
 
-        dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
-            dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
-                         attribution='Map data © OpenStreetMap contributors', detectRetina=True),
-            # Add Ukraine border layer with a bold line
-            dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
-                       options=dict(style=dict(color='black', weight=3, opacity=1.0))),
-            # Add Russian-occupied territories with red hatched design
-            dl.GeoJSON(data=json.loads(rus_control.to_json()),
-                       options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5'))),
-            dl.LayerGroup(id='fire-layer', children=[])
-        ], style={"width": "100%", "height": "700px", "position": "relative", "zIndex": 1, "border": "2px solid #f0f0f0", "border-radius": "10px", "box-shadow": "0px 4px 10px rgba(0, 0, 0, 0.1)"}),
+        html.Div([
+            dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
+                dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
+                             attribution='Map data © OpenStreetMap contributors', detectRetina=True),
+                # Add Ukraine border layer with a bold line
+                dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
+                           options=dict(style=dict(color='black', weight=3, opacity=1.0))),
+                # Add Russian-occupied territories with red hatched design
+                dl.GeoJSON(data=json.loads(rus_control.to_json()),
+                           options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5'))),
+                dl.LayerGroup(id='fire-layer', children=[])
+            ], style={"width": "70%", "height": "700px", "position": "relative", "zIndex": 1, "border": "2px solid #f0f0f0", "border-radius": "10px", "box-shadow": "0px 4px 10px rgba(0, 0, 0, 0.1)"}),
+            
+            html.Div([
+                html.H4("Fire Details", style={"text-align": "center"}),
+                dash_table.DataTable(
+                    id='fire-details-table',
+                    columns=[
+                        {'name': 'Attribute', 'id': 'attribute'},
+                        {'name': 'Value', 'id': 'value'}
+                    ],
+                    style_table={'width': '100%', 'margin': '0 auto', 'border': '1px solid #ddd', 'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.1)'},
+                    style_cell={'textAlign': 'left', 'padding': '10px'},
+                    style_header={'fontWeight': 'bold', 'backgroundColor': '#f9f9f9'},
+                    data=[]
+                )
+            ], style={"width": "28%", "padding": "20px", "margin": "10px", "background-color": "#ffffff", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "float": "right"})
+        ], style={"display": "flex"}),
 
         html.Div(id='fire-stats', style={"text-align": "center", "margin-top": "20px", "font-size": "18px", "font-weight": "bold"})
     ], style={"margin": "20px", "padding": "20px", "background-color": "#ffffff", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"})
@@ -107,7 +127,8 @@ def generate_fire_markers(data):
                 tooltip_text = f"Date: {row['ACQ_DATE']}, Lat: {row['LATITUDE']}, Lon: {row['LONGITUDE']}, Score: {significance_score}"
                 markers.append(dl.Marker(position=[row.geometry.y, row.geometry.x], children=dl.Tooltip(tooltip_text),
                                          icon=dict(iconUrl=f'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-{color}.png',
-                                                   iconSize=[10, 15], iconAnchor=[5, 15], popupAnchor=[1, -14], tooltipAnchor=[6, -12])))
+                                                   iconSize=[10, 15], iconAnchor=[5, 15], popupAnchor=[1, -14], tooltipAnchor=[6, -12]),
+                                         id={'type': 'fire-marker', 'index': row.name}))
         else:  # Clustered points
             lat = group['LATITUDE'].mean()
             lon = group['LONGITUDE'].mean()
@@ -117,7 +138,8 @@ def generate_fire_markers(data):
             icon_size = min(20, 10 + count * 2)  # Dynamically adjust icon size based on cluster size
             markers.append(dl.Marker(position=[lat, lon], children=dl.Tooltip(tooltip_text),
                                      icon=dict(iconUrl=f'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-{color}.png',
-                                               iconSize=[icon_size, icon_size + 10], iconAnchor=[icon_size // 2, icon_size + 10], popupAnchor=[1, -icon_size - 9], tooltipAnchor=[8, -14])))
+                                               iconSize=[icon_size, icon_size + 10], iconAnchor=[icon_size // 2, icon_size + 10], popupAnchor=[1, -icon_size - 9], tooltipAnchor=[8, -14]),
+                                     id={'type': 'fire-cluster', 'index': cluster_id}))
     return markers
 
 # Update the map and statistics based on the selected date range
@@ -161,7 +183,38 @@ def update_fire_layer(start_date, end_date, zoom_level, bounds):
     stats = f"Total Abnormal Fires: {abnormal_fires}"
     
     return generate_fire_markers(filtered_data), labels, stats
-    
+
+# Update the table with fire details based on selected fire
+@app.callback(
+    Output('fire-details-table', 'data'),
+    [Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks'),
+     Input({'type': 'fire-cluster', 'index': dash.dependencies.ALL}, 'n_clicks')],
+    prevent_initial_call=True
+)
+def update_fire_details(*args):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return []
+    else:
+        trigger_id = json.loads(ctx.triggered[0]['prop_id'].split('.')[0])
+        if trigger_id['type'] == 'fire-marker':
+            selected_fire = fires_gdf.iloc[trigger_id['index']]
+            data = [
+                {'attribute': 'Date', 'value': str(selected_fire['ACQ_DATE'])},
+                {'attribute': 'Latitude', 'value': selected_fire['LATITUDE']},
+                {'attribute': 'Longitude', 'value': selected_fire['LONGITUDE']},
+                {'attribute': 'Significance Score', 'value': selected_fire['SIGNIFICANCE_SCORE_DECAY']},
+                {'attribute': 'Abnormal Label', 'value': selected_fire['ABNORMAL_LABEL_DECAY']}
+            ]
+        elif trigger_id['type'] == 'fire-cluster':
+            # Mock data for clusters as an example
+            data = [
+                {'attribute': 'Cluster Size', 'value': '15'},
+                {'attribute': 'Average Significance Score', 'value': '0.85'},
+                {'attribute': 'Abnormal Fires', 'value': '10'},
+                {'attribute': 'Cluster Description', 'value': 'Cluster of fires in a region of Ukraine'}
+            ]
+        return data
 
 # Run app
 if __name__ == "__main__":
