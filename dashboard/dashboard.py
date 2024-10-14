@@ -21,18 +21,11 @@ sys.path.append(project_root)
 # Load data
 fires_data = pd.read_csv('results/50km/test_predictions.csv')
 
-
-
 # Convert ACQ_DATE to datetime format for date picker compatibility
 fires_data['ACQ_DATE'] = pd.to_datetime(fires_data['ACQ_DATE']).dt.date
 
 # Create a GeoDataFrame from the fires data
 fires_gdf = gpd.GeoDataFrame(fires_data, geometry=gpd.points_from_xy(fires_data.LONGITUDE, fires_data.LATITUDE))
-
-
-
-# Sample the data to reduce the number of markers displayed (e.g., 0.1% of the data)
-fires_gdf = fires_gdf.sample(frac=0.5, random_state=42)
 
 # Load Ukraine borders
 ukraine_borders = gpd.read_file('data/ukr_borders/ukr_borders.shp')
@@ -44,6 +37,7 @@ rus_control = rus_control.drop(columns=['CreationDa', 'EditDate'])
 
 # Initialize Dash app
 app = dash.Dash(__name__)
+app.title = "Ukraine Forest Fires Dashboard"
 
 # Map of Ukraine
 ukraine_center = [48.3794, 31.1656]
@@ -52,46 +46,56 @@ ukraine_center = [48.3794, 31.1656]
 min_date = fires_gdf['ACQ_DATE'].min()
 max_date = fires_gdf['ACQ_DATE'].max()
 
-# Convert dates to ordinal for slider representation
-min_date_ordinal = min_date.toordinal()
-max_date_ordinal = max_date.toordinal()
-
 # Layout
 app.layout = html.Div([
-    html.H1("Ukraine Forest Fires Dashboard"),
-    html.P("Map of forest fires in Ukraine, colored by classification label."),
-    dcc.Dropdown(
-        id='date-dropdown',
-        options=[
-            {'label': pd.Timestamp(year=year, month=month, day=1).strftime('%B %Y'), 'value': pd.Timestamp(year=year, month=month, day=1).strftime('%Y-%m-%d')}
-            for year in range(min_date.year, max_date.year + 1)
-            for month in range(1, 13)
-            if pd.Timestamp(year=year, month=month, day=1) >= pd.Timestamp(min_date) and pd.Timestamp(year=year, month=month, day=1) <= pd.Timestamp(max_date)
-        ],
-        value='2023-01-01',
-        clearable=False
-    ),
-    html.Div(id='date-slider-labels', style={"text-align": "center", "margin-top": "10px"}),
-    dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
-        dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
-                     attribution='Map data © OpenStreetMap contributors', detectRetina=True),
-        # Add Ukraine border layer with a bold line
-        dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
-                   options=dict(style=dict(color='black', weight=3, opacity=1.0))),
-        # Add Russian-occupied territories with red hatched design
-        dl.GeoJSON(data=json.loads(rus_control.to_json()),
-                   options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5'))),
-        dl.LayerGroup(id='fire-layer', children=[])
-    ], style={"width": "100%", "height": "600px"}),
-    html.Div(id='fire-stats', style={"text-align": "center", "margin-top": "20px"})
+    html.Div([
+        html.H1("Ukraine Forest Fires Dashboard", style={"text-align": "center", "margin-bottom": "20px"}),
+        html.P("An interactive dashboard visualizing forest fires in Ukraine, categorized by classification labels. The dashboard allows users to explore spatial and temporal patterns of forest fires, helping to identify abnormal fire activity.",
+               style={"text-align": "center", "margin-bottom": "30px", "font-size": "18px"}),
+    ], style={"background-color": "#f9f9f9", "padding": "30px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "margin": "20px"}),
+
+    html.Div([
+        html.Div([
+            html.Label("Select Date:", style={"font-weight": "bold", "font-size": "16px"}),
+            dcc.DatePickerSingle(
+                id='date-picker',
+                min_date_allowed=min_date,
+                max_date_allowed=max_date,
+                initial_visible_month=min_date,
+                number_of_months_shown=2,
+                placeholder='📅',
+                display_format='DD MMMM YYYY',
+                clearable=False,
+                persistence=True,
+                persistence_type='session',
+                style={"width": "100%", "padding": "10px", "box-shadow": "0px 2px 5px rgba(0, 0, 0, 0.1)", "border-radius": "5px", "zIndex": 3}
+            ),
+        ], style={"width": "10%", "margin": "auto", "position": "relative", "zIndex": 3}),
+
+        html.Div(id='date-slider-labels', style={"text-align": "center", "margin-top": "10px", "font-size": "16px"}),
+
+        dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
+            dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
+                         attribution='Map data © OpenStreetMap contributors', detectRetina=True),
+            # Add Ukraine border layer with a bold line
+            dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
+                       options=dict(style=dict(color='black', weight=3, opacity=1.0))),
+            # Add Russian-occupied territories with red hatched design
+            dl.GeoJSON(data=json.loads(rus_control.to_json()),
+                       options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5'))),
+            dl.LayerGroup(id='fire-layer', children=[])
+        ], style={"width": "100%", "height": "700px", "position": "relative", "zIndex": 1, "border": "2px solid #f0f0f0", "border-radius": "10px", "box-shadow": "0px 4px 10px rgba(0, 0, 0, 0.1)"}),
+
+        html.Div(id='fire-stats', style={"text-align": "center", "margin-top": "20px", "font-size": "18px", "font-weight": "bold"})
+    ], style={"margin": "20px", "padding": "20px", "background-color": "#ffffff", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)"})
 ])
 
 # Fire markers colored by their label
 def generate_fire_markers(data):
     markers = []
     # If there are more than 200 fires, cluster them to reduce the number of markers
-    if len(data) > 200:
-        num_clusters = 200  # Limit the number of clusters to 200
+    if len(data) > 500:
+        num_clusters = 500  # Limit the number of clusters to 500
         kmeans = KMeans(n_clusters=num_clusters, random_state=42)
         data['cluster'] = kmeans.fit_predict(data[['LATITUDE', 'LONGITUDE']])
     else:
@@ -123,12 +127,11 @@ def generate_fire_markers(data):
     [Output('fire-layer', 'children'),
      Output('date-slider-labels', 'children'),
      Output('fire-stats', 'children')],
-    [Input('date-dropdown', 'value'),
+    [Input('date-picker', 'date'),
      Input('fire-map', 'zoom'),
      Input('fire-map', 'bounds')]
 )
 def update_fire_layer(date_range, zoom_level, bounds):
-    data_to_use = fires_gdf
     start_date = pd.to_datetime(date_range).date()
     end_date = (pd.to_datetime(date_range) + pd.DateOffset(months=1) - pd.DateOffset(days=1)).date()
     
@@ -147,14 +150,10 @@ def update_fire_layer(date_range, zoom_level, bounds):
     # Calculate statistics
     total_fires = len(filtered_data)
     abnormal_fires = len(filtered_data.loc[filtered_data['ABNORMAL_LABEL_DECAY'] == 1])
-    normal_fires = total_fires - abnormal_fires
-    abnormal_percentage = (abnormal_fires / total_fires) * 100 if total_fires > 0 else 0
-    normal_percentage = (normal_fires / total_fires) * 100 if total_fires > 0 else 0
-    stats = f"Total Fires: {total_fires} | Abnormal Fires: {abnormal_fires} ({abnormal_percentage:.2f}%) | Normal Fires: {normal_fires} ({normal_percentage:.2f}%)"
+    stats = f"Total Abnormal Fires: {abnormal_fires}"
     
     return generate_fire_markers(filtered_data), labels, stats
 
 # Run app
 if __name__ == "__main__":
     app.run_server(debug=True)
-    
