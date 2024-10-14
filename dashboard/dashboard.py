@@ -57,20 +57,18 @@ app.layout = html.Div([
     html.Div([
         html.Div([
             html.Label("Select Date:", style={"font-weight": "bold", "font-size": "16px"}),
-            dcc.DatePickerSingle(
-                id='date-picker',
+            dcc.DatePickerRange(
+                id='date-picker-range',
                 min_date_allowed=min_date,
                 max_date_allowed=max_date,
                 initial_visible_month=min_date,
-                number_of_months_shown=2,
-                placeholder='📅',
+                start_date=min_date,
+                end_date=min_date + pd.DateOffset(months=1) - pd.DateOffset(days=1),
                 display_format='DD MMMM YYYY',
                 clearable=False,
-                persistence=True,
-                persistence_type='session',
-                style={"width": "100%", "padding": "10px", "box-shadow": "0px 2px 5px rgba(0, 0, 0, 0.1)", "border-radius": "5px", "zIndex": 3}
+                style={'width': '400px', 'font-size': '16px', 'display': 'inline-block', 'padding': '10px', 'box-shadow': '0px 2px 5px rgba(0, 0, 0, 0.1)', 'border-radius': '5px', 'zIndex': 3}
             ),
-        ], style={"width": "10%", "margin": "auto", "position": "relative", "zIndex": 3}),
+        ], style={"width": "30%", "margin": "auto", "position": "relative", "zIndex": 3}),
 
         html.Div(id='date-slider-labels', style={"text-align": "center", "margin-top": "10px", "font-size": "16px"}),
 
@@ -127,13 +125,23 @@ def generate_fire_markers(data):
     [Output('fire-layer', 'children'),
      Output('date-slider-labels', 'children'),
      Output('fire-stats', 'children')],
-    [Input('date-picker', 'date'),
+    [Input('date-picker-range', 'start_date'),
+     Input('date-picker-range', 'end_date'),
      Input('fire-map', 'zoom'),
-     Input('fire-map', 'bounds')]
+     Input('fire-map', 'bounds')],
+    prevent_initial_call=False
 )
-def update_fire_layer(date_range, zoom_level, bounds):
-    start_date = pd.to_datetime(date_range).date()
-    end_date = (pd.to_datetime(date_range) + pd.DateOffset(months=1) - pd.DateOffset(days=1)).date()
+def update_fire_layer(start_date, end_date, zoom_level, bounds):
+    if not bounds or len(bounds) < 2:
+        # Set default bounds if they are not provided or incomplete
+        bounds = [[44.0, 22.0], [52.0, 40.0]]  # Approximate bounds for Ukraine
+    
+    start_date = pd.to_datetime(start_date).date()
+    end_date = pd.to_datetime(end_date).date()
+
+    # Ensure the selected date range is not more than 1 month apart
+    if (end_date - start_date).days > 31:
+        end_date = (pd.to_datetime(start_date) + pd.DateOffset(months=1) - pd.DateOffset(days=1)).date()
     
     # Extract bounds
     south_west = bounds[0]
@@ -153,6 +161,7 @@ def update_fire_layer(date_range, zoom_level, bounds):
     stats = f"Total Abnormal Fires: {abnormal_fires}"
     
     return generate_fire_markers(filtered_data), labels, stats
+    
 
 # Run app
 if __name__ == "__main__":
