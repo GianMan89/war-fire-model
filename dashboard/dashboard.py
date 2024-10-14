@@ -3,22 +3,17 @@ from dash import dcc, html, dash_table
 import dash_leaflet as dl
 import pandas as pd
 import geopandas as gpd
-from dash.dependencies import Input, Output, State
+from dash.dependencies import Input, Output
 import json
-import numpy as np
-import os
-import sys
 import warnings
+import plotly.graph_objs as go
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
-current_path = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_path, '../../'))  # Adjust based on depth
-sys.path.append(project_root)
-
 # Load data
 fires_data = pd.read_csv('results/50km/test_predictions.csv')
+fires_data = fires_data[fires_data['ABNORMAL_LABEL_DECAY'] == 1]
 
 # Convert ACQ_DATE to datetime.date format for date picker compatibility
 fires_data['ACQ_DATE'] = pd.to_datetime(fires_data['ACQ_DATE']).dt.date
@@ -53,15 +48,17 @@ app.layout = html.Div([
     dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
         dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
                      attribution='Map data © OpenStreetMap contributors', detectRetina=True),
-        dl.LayerGroup(id='fire-layer', children=[]),
         dl.LayerGroup(id='ukraine-borders-layer', children=[
             dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
-                       options=dict(style=dict(color='black', weight=3, opacity=1.0)))
+                       options=dict(style=dict(color='black', weight=3, opacity=1.0)),
+                       zoomToBoundsOnClick=False)
         ]),
         dl.LayerGroup(id='rus-control-layer', children=[
             dl.GeoJSON(data=json.loads(rus_control.to_json()),
-                       options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5')))
-        ])
+                       options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5')),
+                       zoomToBoundsOnClick=False)
+        ]),
+        dl.LayerGroup(id='fire-layer', children=[])
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
     html.Div([
@@ -71,7 +68,12 @@ app.layout = html.Div([
     ], style={"position": "absolute", "top": "10px", "right": "10px", "background-color": "#ffffff", "padding": "20px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2}),
 
     html.Div([
-        html.Label("Select Date", style={"font-weight": "bold", "font-size": "16px"}),
+        dcc.Graph(
+            id='fires-per-day-plot',
+            config={'displayModeBar': False},
+            style={'height': '200px', 'margin-bottom': '0px'}
+        ),
+        html.Label("Select Date", style={"font-weight": "bold", "font-size": "16px", "margin-top": "10px"}),
         dcc.Slider(
             id='start-date-slider',
             min=0,
@@ -96,7 +98,7 @@ app.layout = html.Div([
             style_header={'fontWeight': 'bold', 'backgroundColor': '#f9f9f9'},
             data=[],
         )
-    ], style={"position": "absolute", "top": "10px", "left": "10px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "none"}, id='fire-details-container')
+    ], style={"position": "absolute", "top": "20px", "left": "60px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "none"}, id='fire-details-container')
 ])
 
 # Fire markers colored by their label
@@ -105,11 +107,13 @@ def generate_fire_markers(data):
     for _, row in data.iterrows():
         markers.append(dl.CircleMarker(
             center=[row.geometry.y, row.geometry.x],
-            radius=2,
+            radius=5,
             color='red',
             fill=True,
             fillOpacity=0.6,
-            id={'type': 'fire-marker', 'index': row.name}
+            id={'type': 'fire-marker', 'index': row.name},
+            n_clicks=0,
+            interactive=True  # Makes the circle marker clickable
         ))
     return markers
 
@@ -131,7 +135,7 @@ def update_fire_layer(start_date_offset, bounds):
     south_west = bounds[0]
     north_east = bounds[1]
 
-    # Filter data based on the date range and the current map bounds
+    # Filter data based on the date range, current map bounds, and abnormal label
     filtered_data = fires_gdf[(fires_gdf['ACQ_DATE'] == start_date) &
                               (fires_gdf['LATITUDE'] >= south_west[0]) & (fires_gdf['LATITUDE'] <= north_east[0]) &
                               (fires_gdf['LONGITUDE'] >= south_west[1]) & (fires_gdf['LONGITUDE'] <= north_east[1])]
@@ -162,40 +166,51 @@ def toggle_layers(toggle_borders_clicks, toggle_rus_control_clicks):
     
     return borders_layer, rus_control_layer
 
-# Update the table with fire details based on map click
+# Update the table with fire details based on marker click
 @app.callback(
     [Output('fire-details-table', 'data'),
      Output('fire-details-container', 'style')],
-    [Input('fire-map', 'click_lat_lng')],
+    [Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks')],
     prevent_initial_call=True
 )
-def update_fire_details(click_lat_lng):
-    if not click_lat_lng:
+def update_fire_details(marker_clicks):
+    ctx = dash.callback_context
+    if not ctx.triggered or all(click is None for click in marker_clicks):
         return [], {'display': 'none'}
-    lat, lon = click_lat_lng
-    radius = 0.5  # Radius in degrees for selecting nearby fires
-    selected_fires = fires_gdf[(fires_gdf['LATITUDE'] >= lat - radius) & (fires_gdf['LATITUDE'] <= lat + radius) &
-                               (fires_gdf['LONGITUDE'] >= lon - radius) & (fires_gdf['LONGITUDE'] <= lon + radius)]
+
+    marker_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    index = int(json.loads(marker_id)['index'])
+    row = fires_gdf.loc[index]
+
+    data = [
+        {'attribute': 'Date', 'value': str(row['ACQ_DATE'])},
+        {'attribute': 'Latitude', 'value': row['LATITUDE']},
+        {'attribute': 'Longitude', 'value': row['LONGITUDE']},
+        {'attribute': 'Significance Score', 'value': row['SIGNIFICANCE_SCORE_DECAY']},
+        {'attribute': 'Abnormal Label', 'value': row['ABNORMAL_LABEL_DECAY']}
+    ]
     
-    data = []
-    for _, row in selected_fires.iterrows():
-        data.append({
-            'attribute': 'Date', 'value': str(row['ACQ_DATE'])
-        })
-        data.append({
-            'attribute': 'Latitude', 'value': row['LATITUDE']
-        })
-        data.append({
-            'attribute': 'Longitude', 'value': row['LONGITUDE']
-        })
-        data.append({
-            'attribute': 'Significance Score', 'value': row['SIGNIFICANCE_SCORE_DECAY']
-        })
-        data.append({
-            'attribute': 'Abnormal Label', 'value': row['ABNORMAL_LABEL_DECAY']
-        })
+    return data, {"position": "absolute", "top": "20px", "left": "60px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "block"}
+
+# Plot the number of fire events per day
+@app.callback(
+    Output('fires-per-day-plot', 'figure'),
+    [Input('start-date-slider', 'value')]
+)
+def update_fires_per_day_plot(start_date_offset):
+    daily_fire_counts = fires_gdf['ACQ_DATE'].value_counts().sort_index()
     
-    return data, {"position": "absolute", "top": "10px", "left": "10px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "block"}
+    figure = go.Figure(data=[
+        go.Scatter(x=daily_fire_counts.index, y=daily_fire_counts.values, mode='lines+markers', line=dict(width=2))
+    ])
+    figure.update_layout(
+        title='Number of Fire Events per Day',
+        xaxis_title='Date',
+        yaxis_title='Number of Fires',
+        margin=dict(l=40, r=40, t=40, b=0),
+        height=150
+    )
+    return figure
 
 # Run app
 if __name__ == "__main__":
