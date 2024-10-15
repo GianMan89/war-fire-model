@@ -118,7 +118,7 @@ def generate_fire_markers(data, use_significance_opacity):
                 color='#cc0000',
                 fillColor='#cc0000',
                 fill=True,
-                fillOpacity=1.0,
+                fillOpacity=0.0,
                 opacity=1.0,
                 id={'type': 'fire-marker', 'index': row.name},
                 n_clicks=0,
@@ -153,6 +153,16 @@ def update_fire_layer(clickData, overlays):
 )
 def log_layers(base_layer, overlays):
     return f"Base layer is {base_layer}, selected overlay(s): {json.dumps(overlays)}"
+
+# Update the fire layer when overlay options change
+@app.callback(
+    [Output('fire-layer', 'children', allow_duplicate=True),
+     Output('selected-date', 'children', allow_duplicate=True)],
+    [Input('layers-control', 'overlays')],
+    prevent_initial_call=True
+)
+def refresh_fire_layer(overlays):
+    return update_fire_layer(None, overlays)
 
 # Update the table with fire details based on marker click
 @app.callback(
