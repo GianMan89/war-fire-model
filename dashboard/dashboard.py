@@ -59,8 +59,8 @@ app.layout = html.Div([
             ]), name='Russian-Occupied Areas', checked=True),
             dl.Overlay(dl.LayerGroup(id='significance-opacity-layer', children=[]), name='Use Significance for Opacity', checked=False)
         ]),
-        dl.LayerGroup(id='fire-layer', children=[]),
-        dl.LayerGroup(id='selected-fire-layer', children=[]),
+        dl.Pane(dl.LayerGroup(id='fire-layer', children=[]), name='fire-pane', style=dict(zIndex=500)),
+        dl.Pane(dl.LayerGroup(id='selected-fire-layer', children=[]), name='selected-fire-pane', style=dict(zIndex=501)),
         dl.ScaleControl(position='topleft', metric=True, imperial=True)
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
@@ -193,8 +193,8 @@ def update_fire_details(marker_clicks):
     selected_fire_marker = dl.CircleMarker(
         center=[row.geometry.y, row.geometry.x],
         radius=12,
-        color='#ffed3e',
-        fillColor='#ffed3e',
+        color='#6e57ce',
+        fillColor='#6e57ce',
         fill=True,
         fillOpacity=0.8,
         opacity=1.0,
