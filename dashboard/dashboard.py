@@ -1,9 +1,8 @@
 import dash
-from dash import dcc, html, dash_table
+from dash import dcc, html, dash_table, Output, Input
 import dash_leaflet as dl
 import pandas as pd
 import geopandas as gpd
-from dash.dependencies import Input, Output
 import json
 import warnings
 import plotly.graph_objs as go
@@ -46,26 +45,22 @@ slider_marks = {i: (min_date + pd.DateOffset(days=i)).strftime('%m-%Y') for i in
 # Layout
 app.layout = html.Div([
     dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
-        dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
-                     attribution='Map data © OpenStreetMap contributors', detectRetina=True),
-        dl.LayerGroup(id='ukraine-borders-layer', children=[
-            dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
-                       options=dict(style=dict(color='black', weight=3, opacity=1.0)),
-                       zoomToBoundsOnClick=False)
+        dl.LayersControl(id='layers-control', position='topright', children=[
+            dl.BaseLayer(dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
+                                     attribution='Map data © OpenStreetMap contributors', detectRetina=True),
+                         name='OpenStreetMap', checked=True),
+            dl.Overlay(dl.LayerGroup(id='ukraine-borders-layer', children=[
+                dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
+                           options=dict(style=dict(color='black', weight=3, opacity=1.0)))
+            ]), name='Ukraine Borders', checked=True),
+            dl.Overlay(dl.LayerGroup(id='rus-control-layer', children=[
+                dl.GeoJSON(data=json.loads(rus_control.to_json()),
+                           options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5')))
+            ]), name='Russian-Occupied Areas', checked=True)
         ]),
-        dl.LayerGroup(id='rus-control-layer', children=[
-            dl.GeoJSON(data=json.loads(rus_control.to_json()),
-                       options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5')),
-                       zoomToBoundsOnClick=False)
-        ]),
-        dl.LayerGroup(id='fire-layer', children=[])
+        dl.LayerGroup(id='fire-layer', children=[]),
+        dl.ScaleControl(position='topleft', metric=True, imperial=True)
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
-
-    html.Div([
-        html.Label("Settings", style={"font-weight": "bold", "font-size": "16px"}),
-        html.Button("Toggle Ukraine Borders", id='toggle-ukraine-borders', n_clicks=1, style={"margin-top": "10px"}),
-        html.Button("Toggle Russian-Occupied Areas", id='toggle-rus-control', n_clicks=1, style={"margin-top": "10px"}),
-    ], style={"position": "absolute", "top": "10px", "right": "10px", "background-color": "#ffffff", "padding": "20px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2}),
 
     html.Div([
         html.Div(id='selected-date', style={"margin-bottom": "10px", "font-weight": "bold", "font-size": "16px"}),
@@ -80,15 +75,22 @@ app.layout = html.Div([
         dash_table.DataTable(
             id='fire-details-table',
             columns=[
-                {'name': 'Attribute', 'id': 'attribute'},
-                {'name': 'Value', 'id': 'value'}
+                {'name': 'Date', 'id': 'ACQ_DATE'},
+                {'name': 'Latitude', 'id': 'LATITUDE'},
+                {'name': 'Longitude', 'id': 'LONGITUDE'},
+                {'name': 'Significance', 'id': 'SIGNIFICANCE_SCORE_DECAY'},
+                {'name': 'Fire Type', 'id': 'FIRE_TYPE'}
             ],
             style_table={'width': '100%', 'margin': '0 auto', 'border': '1px solid #ddd', 'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.1)'},
-            style_cell={'textAlign': 'left', 'padding': '10px'},
+            style_cell={'textAlign': 'center', 'padding': '10px'},
             style_header={'fontWeight': 'bold', 'backgroundColor': '#f9f9f9'},
+            style_data={'whiteSpace': 'normal', 'height': 'auto'},
+            style_as_list_view=True,
             data=[],
         )
-    ], style={"position": "absolute", "top": "20px", "left": "60px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "none"}, id='fire-details-container')
+    ], style={"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "none"}, id='fire-details-container'),
+
+    html.Div(id='layer-log')
 ])
 
 # Fire markers colored by their label
@@ -124,29 +126,14 @@ def update_fire_layer(clickData):
     selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
     return generate_fire_markers(filtered_data), selected_date_str
 
-# Toggle Ukraine borders and Russian-occupied areas
+# Log the base layer and overlay selections
 @app.callback(
-    [Output('ukraine-borders-layer', 'children'),
-     Output('rus-control-layer', 'children')],
-    [Input('toggle-ukraine-borders', 'n_clicks'),
-     Input('toggle-rus-control', 'n_clicks')]
+    Output('layer-log', 'children'),
+    [Input('layers-control', 'baseLayer'), Input('layers-control', 'overlays')],
+    prevent_initial_call=True
 )
-def toggle_layers(toggle_borders_clicks, toggle_rus_control_clicks):
-    borders_layer = []
-    rus_control_layer = []
-
-    if toggle_borders_clicks % 2 == 1:
-        borders_layer = [
-            dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
-                       options=dict(style=dict(color='black', weight=3, opacity=1.0)))
-        ]
-    if toggle_rus_control_clicks % 2 == 1:
-        rus_control_layer = [
-            dl.GeoJSON(data=json.loads(rus_control.to_json()),
-                       options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5')))
-        ]
-    
-    return borders_layer, rus_control_layer
+def log_layers(base_layer, overlays):
+    return f"Base layer is {base_layer}, selected overlay(s): {json.dumps(overlays)}"
 
 # Update the table with fire details based on marker click
 @app.callback(
@@ -164,15 +151,15 @@ def update_fire_details(marker_clicks):
     index = int(json.loads(marker_id)['index'])
     row = fires_gdf.loc[index]
 
-    data = [
-        {'attribute': 'Date', 'value': str(row['ACQ_DATE'])},
-        {'attribute': 'Latitude', 'value': row['LATITUDE']},
-        {'attribute': 'Longitude', 'value': row['LONGITUDE']},
-        {'attribute': 'Significance', 'value': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%"},
-        {'attribute': 'Fire Type', 'value': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"}
-    ]
+    data = [{
+        'ACQ_DATE': str(row['ACQ_DATE']),
+        'LATITUDE': row['LATITUDE'],
+        'LONGITUDE': row['LONGITUDE'],
+        'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
+        'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
+    }]
     
-    return data, {"position": "absolute", "top": "20px", "left": "60px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "block"}
+    return data, {"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "block"}
 
 # Plot the number of fire events per day
 @app.callback(
