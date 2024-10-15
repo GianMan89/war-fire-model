@@ -195,7 +195,7 @@ def generate_ukraine_temp_layer(selected_date):
 )
 def update_layers(clickData, overlays):
     if not clickData:
-        return [], "Select a date from the plot."
+        return [], "Select a date from the plot.", [], []
     
     selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
     
@@ -220,7 +220,7 @@ def log_layers(base_layer, overlays):
 # Update the fire layer when overlay options change
 @app.callback(
     [Output('fire-layer', 'children', allow_duplicate=True),
-     Output('selected-date', 'children', allow_duplicate=True),
+     Output('selected-date', 'children', allow_duplicate=True), [], [],
     ],
     [Input('layers-control', 'overlays')],
     prevent_initial_call=True
