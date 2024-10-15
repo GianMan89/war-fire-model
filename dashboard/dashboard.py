@@ -60,6 +60,7 @@ app.layout = html.Div([
             dl.Overlay(dl.LayerGroup(id='significance-opacity-layer', children=[]), name='Use Significance for Opacity', checked=False)
         ]),
         dl.LayerGroup(id='fire-layer', children=[]),
+        dl.LayerGroup(id='selected-fire-layer', children=[]),
         dl.ScaleControl(position='topleft', metric=True, imperial=True)
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
@@ -164,17 +165,18 @@ def log_layers(base_layer, overlays):
 def refresh_fire_layer(overlays):
     return update_fire_layer(None, overlays)
 
-# Update the table with fire details based on marker click
+# Update the table with fire details based on marker click, and mark the selected fire on the map
 @app.callback(
     [Output('fire-details-table', 'data'),
-     Output('fire-details-container', 'style')],
+     Output('fire-details-container', 'style'),
+     Output('selected-fire-layer', 'children')],
     [Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks')],
     prevent_initial_call=True
 )
 def update_fire_details(marker_clicks):
     ctx = dash.callback_context
     if not ctx.triggered or all(click is None for click in marker_clicks):
-        return [], {'display': 'none'}
+        return [], {'display': 'none'}, []
 
     marker_id = ctx.triggered[0]['prop_id'].split('.')[0]
     index = int(json.loads(marker_id)['index'])
@@ -187,8 +189,19 @@ def update_fire_details(marker_clicks):
         'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
         'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
     }]
+
+    selected_fire_marker = dl.CircleMarker(
+        center=[row.geometry.y, row.geometry.x],
+        radius=12,
+        color='#ffed3e',
+        fillColor='#ffed3e',
+        fill=True,
+        fillOpacity=0.8,
+        opacity=1.0,
+        id='selected-fire-marker'
+    )
     
-    return data, {"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}
+    return data, {"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}, [selected_fire_marker]
 
 # Plot the number of fire events per day
 @app.callback(
