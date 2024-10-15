@@ -32,6 +32,7 @@ class DataLoader:
     preprocess_fire_data(data)
     filter_border(data)
     load_dynamic_data(start_date, end_date)
+    load_weather_data(start_date, end_date)
     load_static_data(resolution="50km")
     """
     @staticmethod
@@ -237,6 +238,66 @@ class DataLoader:
             raise ValueError(f"One of the CSV files is empty: {e}") from e
         except Exception as e:
             raise Exception(f"Error occurred while loading dynamic data: {e}") from e
+        
+    @staticmethod
+    def load_weather_data(start_date, end_date):
+        """
+        Loads and processes weather data within a specified date range.
+        This function reads CSV files from the weather data directory, filters them by the given date range,
+        and returns a concatenated and deduplicated DataFrame for weather data.
+
+        Parameters
+        ----------
+        start_date : datetime
+            The start date for filtering the data.
+        end_date : datetime
+            The end date for filtering the data.
+        
+        Returns
+        -------
+        DataFrame
+            The concatenated and deduplicated weather data within the date range.
+
+        Raises
+        ------
+        FileNotFoundError
+            If no weather data files are found for the specified date range.
+        ValueError
+            If one of the CSV files is empty.
+        Exception
+            If an error occurs while loading weather data.
+        """
+        # Convert start and end dates to datetime.date
+        start_date, end_date = force_datetime(start_date), force_datetime(end_date)
+        weather_data = []
+        try:
+            # Iterate over weather data directory
+            folder_path = get_path("weather_data_dir")
+            for file_path in os.listdir(folder_path):
+                if not file_path.endswith('.csv'):
+                    continue
+                year = int(file_path.split('_')[-1][:4])
+                # Check if the file falls within the specified date range
+                if start_date.year <= year <= end_date.year:
+                    df = pd.read_csv(f"{folder_path}/{file_path}")
+                    weather_data.append(df)
+
+            if not weather_data:
+                raise FileNotFoundError("No weather data files found for the specified date range.")
+            
+            # Concatenate and drop duplicates
+            weather_data = pd.concat(weather_data).drop_duplicates()
+            
+            # Filter data by date range
+            weather_data = DataLoader.filter_date(weather_data, start_date, end_date)
+            
+            return weather_data
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Error while loading weather data files: {e}") from e
+        except pd.errors.EmptyDataError as e:
+            raise ValueError(f"One of the CSV files is empty: {e}") from e
+        except Exception as e:
+            raise Exception(f"Error occurred while loading weather data: {e}") from e
     
     @staticmethod
     def load_static_data(resolution="50km"):
