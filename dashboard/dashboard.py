@@ -127,33 +127,21 @@ def generate_fire_markers(data, use_significance_opacity):
             ))
     return markers
 
-# Load fires only once based on the selected date range and visible map bounds
+# Load fires only once based on the selected date range
 @app.callback(
     [Output('fire-layer', 'children'),
      Output('selected-date', 'children')],
     [Input('fires-per-day-plot', 'clickData'),
-     Input('fire-map', 'bounds'),
      Input('layers-control', 'overlays')]
 )
-def update_fire_layer(clickData, bounds, overlays):
+def update_fire_layer(clickData, overlays):
     if not clickData:
         return [], "Select a date from the plot."
     
     selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
     
-    # Set default bounds if they are not provided or incomplete
-    if not bounds or len(bounds) < 2:
-        bounds = [[44.0, 22.0], [52.0, 40.0]]  # Approximate bounds for Ukraine
-    
-    # Extract bounds
-    south_west = bounds[0]
-    north_east = bounds[1]
-    
-    # Filter data based on the selected date, abnormal label, and current map bounds
-    filtered_data = fires_gdf[(fires_gdf['ACQ_DATE'] == selected_date) &
-                              (fires_gdf['LATITUDE'] >= south_west[0]) & (fires_gdf['LATITUDE'] <= north_east[0]) &
-                              (fires_gdf['LONGITUDE'] >= south_west[1]) & (fires_gdf['LONGITUDE'] <= north_east[1]) &
-                              (fires_gdf['ABNORMAL_LABEL_DECAY'] == 1)]
+    # Filter data based on the selected date and abnormal label
+    filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
     selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
     use_significance_opacity = 'Use Significance for Opacity' in overlays
     return generate_fire_markers(filtered_data, use_significance_opacity), selected_date_str
@@ -171,11 +159,11 @@ def log_layers(base_layer, overlays):
 @app.callback(
     [Output('fire-layer', 'children', allow_duplicate=True),
      Output('selected-date', 'children', allow_duplicate=True)],
-    [Input('layers-control', 'overlays'), Input('fire-map', 'bounds')],
+    [Input('layers-control', 'overlays')],
     prevent_initial_call=True
 )
-def refresh_fire_layer(overlays, bounds):
-    return update_fire_layer(None, bounds, overlays)
+def refresh_fire_layer(overlays):
+    return update_fire_layer(None, overlays)
 
 # Update the table with fire details based on marker click, and mark the selected fire on the map
 @app.callback(
