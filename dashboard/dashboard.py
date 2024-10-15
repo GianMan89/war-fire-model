@@ -9,6 +9,8 @@ import json
 import warnings
 import plotly.graph_objs as go
 
+import random
+
 # Suppress warnings
 warnings.filterwarnings("ignore")
 
@@ -19,6 +21,8 @@ try:
     sys.path.append(project_root)
 except Exception as e:
     raise RuntimeError(f"Failed to add project root to Python path: {e}")
+
+from src.preprocessing.load_data import DataLoader
 
 # Load data
 fires_data = pd.read_csv('results/50km/test_predictions.csv')
@@ -38,16 +42,17 @@ rus_control = gpd.read_file('data/rus_control/rus_control_2023.shp')
 rus_control.to_crs(epsg=4326, inplace=True)
 rus_control = rus_control.drop(columns=['CreationDa', 'EditDate'])
 
+# Load weather data
+min_date = fires_gdf['ACQ_DATE'].min()
+max_date = fires_gdf['ACQ_DATE'].max()
+weather_data = DataLoader.load_weather_data(min_date, max_date)
+
 # Initialize Dash app
 app = dash.Dash(__name__)
 app.title = "Ukraine Forest Fires Dashboard"
 
 # Map of Ukraine
 ukraine_center = [48.3794, 31.1656]
-
-# Get min and max dates for the slider
-min_date = fires_gdf['ACQ_DATE'].min()
-max_date = fires_gdf['ACQ_DATE'].max()
 
 # Layout
 app.layout = html.Div([
@@ -58,8 +63,10 @@ app.layout = html.Div([
                          name='OpenStreetMap', checked=True),
             dl.Overlay(dl.LayerGroup(id='ukraine-borders-layer', children=[
                 dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
-                           options=dict(style=dict(color='black', weight=3, opacity=1.0, fillOpacity=0.1)))
+                           options=dict(style=dict(color='black', weight=3, opacity=1.0, fillOpacity=0.0)))
             ]), name='Ukraine Borders', checked=True),
+            dl.Overlay(dl.LayerGroup(id='ukraine-cloud-layer', children=[]), name='Ukraine Cloud Cover', checked=False),
+            dl.Overlay(dl.LayerGroup(id='ukraine-temp-layer', children=[]), name='Ukraine Mean Temperature', checked=False),
             dl.Overlay(dl.LayerGroup(id='rus-control-layer', children=[
                 dl.GeoJSON(data=json.loads(rus_control.to_json()),
                            options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.1, dashArray='5, 5')))
@@ -134,14 +141,34 @@ def generate_fire_markers(data, use_significance_opacity):
             ))
     return markers
 
-# Load fires only once based on the selected date range
+
+# Function to get cloud cover opacity for a specific oblast and date
+def get_cloud_cover_opacity(oblast_id, acq_date):
+    cloud_cover = weather_data[(weather_data['OBLAST_ID'] == oblast_id) & (weather_data['ACQ_DATE'] == acq_date)]['CLOUD_COVER (%)'].values
+    if len(cloud_cover) > 0:
+        return cloud_cover[0] / 100
+    return 0  # Default zero opacity if no data is found
+
+# Generate Ukraine borders with dynamic cloud cover opacity
+def generate_ukraine_cloud_layer(selected_date):
+    layers = [
+        dl.GeoJSON(
+            data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
+            options=dict(style=dict(color='black', weight=3, opacity=1.0, 
+                                    fillOpacity=get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date)))
+        ) for i in range(len(ukraine_borders))
+    ]
+    return layers
+
+# Load fires and update layers based on the selected date
 @app.callback(
     [Output('fire-layer', 'children'),
-     Output('selected-date', 'children')],
+     Output('selected-date', 'children'),
+     Output('ukraine-cloud-layer', 'children')],
     [Input('fires-per-day-plot', 'clickData'),
      Input('layers-control', 'overlays')]
 )
-def update_fire_layer(clickData, overlays):
+def update_layers(clickData, overlays):
     if not clickData:
         return [], "Select a date from the plot."
     
@@ -151,7 +178,9 @@ def update_fire_layer(clickData, overlays):
     filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
     selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
     use_significance_opacity = 'Use Significance for Opacity' in overlays
-    return generate_fire_markers(filtered_data, use_significance_opacity), selected_date_str
+    fire_markers = generate_fire_markers(filtered_data, use_significance_opacity)
+    ukraine_cloud_layer = generate_ukraine_cloud_layer(selected_date)
+    return fire_markers, selected_date_str, ukraine_cloud_layer
 
 # Log the base layer and overlay selections
 @app.callback(
@@ -165,12 +194,13 @@ def log_layers(base_layer, overlays):
 # Update the fire layer when overlay options change
 @app.callback(
     [Output('fire-layer', 'children', allow_duplicate=True),
-     Output('selected-date', 'children', allow_duplicate=True)],
+     Output('selected-date', 'children', allow_duplicate=True),
+    ],
     [Input('layers-control', 'overlays')],
     prevent_initial_call=True
 )
-def refresh_fire_layer(overlays):
-    return update_fire_layer(None, overlays)
+def refresh_layers(overlays):
+    return update_layers(None, overlays)
 
 # Update the table with fire details based on marker click, and mark the selected fire on the map
 @app.callback(
