@@ -68,12 +68,12 @@ app.layout = html.Div([
     ], style={"position": "absolute", "top": "10px", "right": "10px", "background-color": "#ffffff", "padding": "20px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2}),
 
     html.Div([
+        html.Div(id='selected-date', style={"margin-bottom": "10px", "font-weight": "bold", "font-size": "16px"}),
         dcc.Graph(
             id='fires-per-day-plot',
             config={'displayModeBar': False},
-            style={'height': '180px', 'margin-bottom': '0px', 'margin-top': '10px'}
+            style={'height': '180px', 'margin-bottom': '0px'}
         ),
-        html.Div(id='selected-date', style={"margin-top": "10px", "font-weight": "bold", "font-size": "16px"})
     ], style={"position": "absolute", "bottom": "10px", "left": "5%", "right": "5%", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2}),
 
     html.Div([
