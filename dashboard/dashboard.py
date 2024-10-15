@@ -99,7 +99,7 @@ def generate_fire_markers(data):
     for _, row in data.iterrows():
         markers.append(dl.CircleMarker(
             center=[row.geometry.y, row.geometry.x],
-            radius=5,
+            radius=3,
             color='#cc0000',
             fill=True,
             fillOpacity=0.6,
@@ -172,7 +172,7 @@ def update_fires_per_day_plot(clickData):
     selected_count = daily_fire_counts.get(selected_date, 0) if selected_date else None
     max_fire_count = daily_fire_counts.max()
     
-    text_position = 'top center' if selected_count and selected_count <= 0.5 * max_fire_count else 'bottom center'
+    text_position = 'top center' if selected_count and selected_count <= 0.5 * max_fire_count else 'bottom left'
     
     figure = go.Figure(data=[
         go.Scatter(x=daily_fire_counts.index, 
@@ -185,7 +185,7 @@ def update_fires_per_day_plot(clickData):
             x=[selected_date] if selected_date else [], y=[selected_count] if selected_count else [],
             mode='markers+text',
             marker=dict(size=10, color='#cc0000'),
-            text=[f'<br>{selected_count} fires<br>'],
+            text=[f'{selected_count} fires<br>'],
             textposition=text_position,
             textfont=dict(family='Arial', size=14, color='black'),
             texttemplate='<b>%{text}</b>',
@@ -193,10 +193,9 @@ def update_fires_per_day_plot(clickData):
         )
     ])
     figure.update_layout(
-        xaxis_title='Date',
         yaxis_title='Number of Fires',
         margin=dict(l=40, r=40, t=20, b=0),
-        height=160,
+        height=180,
         showlegend=False,
         plot_bgcolor='#f0f0f0'
     )
