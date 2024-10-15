@@ -1,3 +1,5 @@
+import os
+import sys
 import dash
 from dash import dcc, html, dash_table, Output, Input
 import dash_leaflet as dl
@@ -9,6 +11,14 @@ import plotly.graph_objs as go
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
+
+# Add the project root to the Python path
+try:
+    current_path = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_path, '../'))  # Adjust based on depth
+    sys.path.append(project_root)
+except Exception as e:
+    raise RuntimeError(f"Failed to add project root to Python path: {e}")
 
 # Load data
 fires_data = pd.read_csv('results/50km/test_predictions.csv')
@@ -38,9 +48,6 @@ ukraine_center = [48.3794, 31.1656]
 # Get min and max dates for the slider
 min_date = fires_gdf['ACQ_DATE'].min()
 max_date = fires_gdf['ACQ_DATE'].max()
-
-# Generate slider marks for every second month
-slider_marks = {i: (min_date + pd.DateOffset(days=i)).strftime('%m-%Y') for i in range(0, (max_date - min_date).days + 1, 60)}
 
 # Layout
 app.layout = html.Div([
