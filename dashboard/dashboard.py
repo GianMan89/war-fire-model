@@ -56,7 +56,8 @@ app.layout = html.Div([
             dl.Overlay(dl.LayerGroup(id='rus-control-layer', children=[
                 dl.GeoJSON(data=json.loads(rus_control.to_json()),
                            options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5')))
-            ]), name='Russian-Occupied Areas', checked=True)
+            ]), name='Russian-Occupied Areas', checked=True),
+            dl.Overlay(dl.LayerGroup(id='significance-opacity-layer', children=[]), name='Use Significance for Opacity', checked=False)
         ]),
         dl.LayerGroup(id='fire-layer', children=[]),
         dl.ScaleControl(position='topleft', metric=True, imperial=True)
@@ -94,30 +95,45 @@ app.layout = html.Div([
 ])
 
 # Fire markers colored by their label
-def generate_fire_markers(data):
+def generate_fire_markers(data, use_significance_opacity):
     markers = []
     for _, row in data.iterrows():
-        markers.append(dl.CircleMarker(
-            center=[row.geometry.y, row.geometry.x],
-            radius=10,
-            color='#cc0000', # if row['ABNORMAL_LABEL_DECAY'] == 1 else '#003366',
-            fillColor='#cc0000',# if row['ABNORMAL_LABEL_DECAY'] == 1 else '#003366',
-            fill=True,
-            fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'],
-            opacity=0.0,
-            id={'type': 'fire-marker', 'index': row.name},
-            n_clicks=0,
-            interactive=True  # Makes the circle marker clickable
-        ))
+        if use_significance_opacity:
+            markers.append(dl.CircleMarker(
+                center=[row.geometry.y, row.geometry.x],
+                radius=10,
+                color='#cc0000',
+                fillColor='#cc0000',
+                fill=True,
+                fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'],
+                opacity=0.0,
+                id={'type': 'fire-marker', 'index': row.name},
+                n_clicks=0,
+                interactive=True  # Makes the circle marker clickable
+            ))
+        else:
+            markers.append(dl.CircleMarker(
+                center=[row.geometry.y, row.geometry.x],
+                radius=10,
+                color='#cc0000',
+                fillColor='#cc0000',
+                fill=True,
+                fillOpacity=1.0,
+                opacity=1.0,
+                id={'type': 'fire-marker', 'index': row.name},
+                n_clicks=0,
+                interactive=True  # Makes the circle marker clickable
+            ))
     return markers
 
 # Load fires only once based on the selected date range
 @app.callback(
     [Output('fire-layer', 'children'),
      Output('selected-date', 'children')],
-    [Input('fires-per-day-plot', 'clickData')]
+    [Input('fires-per-day-plot', 'clickData'),
+     Input('layers-control', 'overlays')]
 )
-def update_fire_layer(clickData):
+def update_fire_layer(clickData, overlays):
     if not clickData:
         return [], "Select a date from the plot."
     
@@ -126,7 +142,8 @@ def update_fire_layer(clickData):
     # Filter data based on the selected date and abnormal label
     filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
     selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
-    return generate_fire_markers(filtered_data), selected_date_str
+    use_significance_opacity = 'Use Significance for Opacity' in overlays
+    return generate_fire_markers(filtered_data, use_significance_opacity), selected_date_str
 
 # Log the base layer and overlay selections
 @app.callback(
