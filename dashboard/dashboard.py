@@ -186,8 +186,8 @@ def update_fire_details(marker_clicks):
         {'attribute': 'Date', 'value': str(row['ACQ_DATE'])},
         {'attribute': 'Latitude', 'value': row['LATITUDE']},
         {'attribute': 'Longitude', 'value': row['LONGITUDE']},
-        {'attribute': 'Significance Score', 'value': row['SIGNIFICANCE_SCORE_DECAY']},
-        {'attribute': 'Abnormal Label', 'value': row['ABNORMAL_LABEL_DECAY']}
+        {'attribute': 'Significance', 'value': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%"},
+        {'attribute': 'Fire Type', 'value': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"}
     ]
     
     return data, {"position": "absolute", "top": "20px", "left": "60px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "block"}
@@ -201,6 +201,9 @@ def update_fires_per_day_plot(start_date_offset):
     daily_fire_counts = fires_gdf['ACQ_DATE'].value_counts().sort_index()
     selected_date = min_date + pd.Timedelta(days=start_date_offset)
     selected_count = daily_fire_counts.get(selected_date, 0)
+    max_fire_count = daily_fire_counts.max()
+    
+    text_position = 'top center' if selected_count <= 0.5 * max_fire_count else 'bottom center'
     
     figure = go.Figure(data=[
         go.Scatter(x=daily_fire_counts.index, y=daily_fire_counts.values, mode='lines+markers', line=dict(width=2)),
@@ -208,11 +211,11 @@ def update_fires_per_day_plot(start_date_offset):
             x=[selected_date], y=[selected_count],
             mode='markers+text',
             marker=dict(size=10, color='red'),
-            text=[f'{selected_count} fires<br>'],
-            textposition='top center',
-            textfont=dict(family='Arial', size=16, color='black'),
+            text=[f'<br>{selected_count} fires<br>'],
+            textposition=text_position,
+            textfont=dict(family='Arial', size=14, color='black'),
             texttemplate='<b>%{text}</b>',
-            hoverinfo='skip',
+            hoverinfo='skip'
         )
     ])
     figure.update_layout(
