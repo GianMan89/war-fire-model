@@ -188,7 +188,12 @@ def update_fires_per_day_plot(clickData):
     text_position = 'top center' if selected_count and selected_count <= 0.5 * max_fire_count else 'bottom center'
     
     figure = go.Figure(data=[
-        go.Scatter(x=daily_fire_counts.index, y=daily_fire_counts.values, mode='lines+markers', line=dict(width=2)),
+        go.Scatter(x=daily_fire_counts.index, 
+                   y=daily_fire_counts.values, 
+                   mode='lines+markers', 
+                   line=dict(width=2), 
+                   hovertemplate='%{x|%b %d, %Y}, Fire Count: %{y}',
+                   ),
         go.Scatter(
             x=[selected_date] if selected_date else [], y=[selected_count] if selected_count else [],
             mode='markers+text',
@@ -197,7 +202,7 @@ def update_fires_per_day_plot(clickData):
             textposition=text_position,
             textfont=dict(family='Arial', size=14, color='black'),
             texttemplate='<b>%{text}</b>',
-            hoverinfo='skip'
+            hoverinfo='skip',
         )
     ])
     figure.update_layout(
