@@ -63,13 +63,13 @@ app.layout = html.Div([
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
     html.Div([
-        html.Div(id='selected-date', style={"margin-bottom": "10px", "font-weight": "bold", "font-size": "16px", "color": "#003366"}),
+        html.Div(id='selected-date', style={"margin-bottom": "10px", "font-weight": "bold", "font-size": "16px", "color": "#003366", 'font-family': 'Arial'}),
         dcc.Graph(
             id='fires-per-day-plot',
             config={'displayModeBar': False},
-            style={'height': '180px', 'margin-bottom': '0px'}
+            style={'height': '180px', 'margin-bottom': '0px', 'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.15)', 'border': '1px solid #003366'}
         ),
-    ], style={"position": "absolute", "bottom": "10px", "left": "5%", "right": "5%", "background-color": "#f0f0f0", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "border": "1px solid #cccccc"}),
+    ], style={"position": "absolute", "bottom": "10px", "left": "5%", "right": "5%", "background-color": "#e6e6e6", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "border": "1px solid #cccccc"}),
 
     html.Div([
         dash_table.DataTable(
@@ -199,7 +199,7 @@ def update_fires_per_day_plot(clickData):
         margin=dict(l=40, r=40, t=20, b=0),
         height=180,
         showlegend=False,
-        plot_bgcolor='#f0f0f0'
+        plot_bgcolor='#e6e6e6'
     )
     return figure
 
