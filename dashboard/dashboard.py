@@ -156,7 +156,7 @@ def generate_ukraine_cloud_layer(selected_date):
     layers = [
         dl.GeoJSON(
             data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
-            options=dict(style=dict(color='black', weight=3, opacity=1.0, 
+            options=dict(style=dict(color='black', weight=3, opacity=1.0, fillColor='darkgrey',
                                     fillOpacity=get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date)))
         ) for i in range(len(ukraine_borders))
     ]
