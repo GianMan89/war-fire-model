@@ -99,10 +99,12 @@ def generate_fire_markers(data):
     for _, row in data.iterrows():
         markers.append(dl.CircleMarker(
             center=[row.geometry.y, row.geometry.x],
-            radius=3,
-            color='#cc0000',
+            radius=10,
+            color='#cc0000', # if row['ABNORMAL_LABEL_DECAY'] == 1 else '#003366',
+            fillColor='#cc0000',# if row['ABNORMAL_LABEL_DECAY'] == 1 else '#003366',
             fill=True,
-            fillOpacity=0.6,
+            fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'],
+            opacity=0.0,
             id={'type': 'fire-marker', 'index': row.name},
             n_clicks=0,
             interactive=True  # Makes the circle marker clickable
