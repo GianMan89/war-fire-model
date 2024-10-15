@@ -8,8 +8,8 @@ import geopandas as gpd
 import json
 import warnings
 import plotly.graph_objs as go
-
-import random
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -46,6 +46,8 @@ rus_control = rus_control.drop(columns=['CreationDa', 'EditDate'])
 min_date = fires_gdf['ACQ_DATE'].min()
 max_date = fires_gdf['ACQ_DATE'].max()
 weather_data = DataLoader.load_weather_data(min_date, max_date)
+min_temp = weather_data['TEMPERATURE_2M_MEAN (°C)'].min()
+max_temp = weather_data['TEMPERATURE_2M_MEAN (°C)'].max()
 
 # Initialize Dash app
 app = dash.Dash(__name__)
@@ -160,11 +162,34 @@ def generate_ukraine_cloud_layer(selected_date):
     ]
     return layers
 
+# Function to get mean temperature for a specific oblast and date
+def get_mean_temperature(oblast_id, acq_date):
+    temperature = weather_data[(weather_data['OBLAST_ID'] == oblast_id) & (weather_data['ACQ_DATE'] == acq_date)]['TEMPERATURE_2M_MEAN (°C)'].values
+    if len(temperature) > 0:
+        return temperature[0]
+    return 0  # Default zero temperature if no data is found
+
+# Generate Ukraine temperature layer with color scale based on temperature
+def generate_ukraine_temp_layer(selected_date):
+    temperatures = [get_mean_temperature(ukraine_borders.iloc[i]['id'], selected_date) for i in range(len(ukraine_borders))]
+    norm = mcolors.Normalize(vmin=min_temp, vmax=max_temp)
+    cmap = cm.get_cmap('coolwarm')
+
+    layers = [
+        dl.GeoJSON(
+            data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
+            options=dict(style=dict(fillColor=mcolors.to_hex(cmap(norm(temperatures[i]))), 
+                                    color='black', weight=3, opacity=1.0, fillOpacity=0.8))
+        ) for i in range(len(ukraine_borders))
+    ]
+    return layers
+
 # Load fires and update layers based on the selected date
 @app.callback(
     [Output('fire-layer', 'children'),
      Output('selected-date', 'children'),
-     Output('ukraine-cloud-layer', 'children')],
+     Output('ukraine-cloud-layer', 'children'),
+     Output('ukraine-temp-layer', 'children')],
     [Input('fires-per-day-plot', 'clickData'),
      Input('layers-control', 'overlays')]
 )
@@ -180,7 +205,8 @@ def update_layers(clickData, overlays):
     use_significance_opacity = 'Use Significance for Opacity' in overlays
     fire_markers = generate_fire_markers(filtered_data, use_significance_opacity)
     ukraine_cloud_layer = generate_ukraine_cloud_layer(selected_date)
-    return fire_markers, selected_date_str, ukraine_cloud_layer
+    ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
+    return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer
 
 # Log the base layer and overlay selections
 @app.callback(
