@@ -26,6 +26,7 @@ dill = "^0.3.9"
 split-file-reader = "^0.1.4"
 dash = "^2.18.1"
 dash-leaflet = "^1.0.15"
+dash-extensions = "^1.0.18"
 
 
 [build-system]
