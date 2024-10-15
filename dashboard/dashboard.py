@@ -73,16 +73,6 @@ app.layout = html.Div([
             config={'displayModeBar': False},
             style={'height': '180px', 'margin-bottom': '0px', 'margin-top': '10px'}
         ),
-        html.Label("Select Date", style={"font-weight": "bold", "font-size": "16px", "margin-top": "10px"}),
-        dcc.Slider(
-            id='start-date-slider',
-            min=0,
-            max=(max_date - min_date).days,
-            value=0,
-            marks=slider_marks,
-            tooltip={"placement": "bottom", "always_visible": True},
-            step=1
-        ),
         html.Div(id='selected-date', style={"margin-top": "10px", "font-weight": "bold", "font-size": "16px"})
     ], style={"position": "absolute", "bottom": "10px", "left": "5%", "right": "5%", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2}),
 
@@ -121,25 +111,17 @@ def generate_fire_markers(data):
 @app.callback(
     [Output('fire-layer', 'children'),
      Output('selected-date', 'children')],
-    [Input('start-date-slider', 'value'),
-     Input('fire-map', 'bounds')]
+    [Input('fires-per-day-plot', 'clickData')]
 )
-def update_fire_layer(start_date_offset, bounds):
-    if not bounds or len(bounds) < 2:
-        bounds = [[44.0, 22.0], [52.0, 40.0]]  # Approximate bounds for Ukraine
+def update_fire_layer(clickData):
+    if not clickData:
+        return [], "Select a date from the plot."
     
-    start_date = min_date + pd.Timedelta(days=start_date_offset)
-    end_date = start_date  # Show data for only one day
-
-    # Extract bounds
-    south_west = bounds[0]
-    north_east = bounds[1]
-
-    # Filter data based on the date range, current map bounds, and abnormal label
-    filtered_data = fires_gdf[(fires_gdf['ACQ_DATE'] == start_date) &
-                              (fires_gdf['LATITUDE'] >= south_west[0]) & (fires_gdf['LATITUDE'] <= north_east[0]) &
-                              (fires_gdf['LONGITUDE'] >= south_west[1]) & (fires_gdf['LONGITUDE'] <= north_east[1])]
-    selected_date_str = f"Selected Date: {start_date.strftime('%d-%m-%Y')}"
+    selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+    
+    # Filter data based on the selected date and abnormal label
+    filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+    selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
     return generate_fire_markers(filtered_data), selected_date_str
 
 # Toggle Ukraine borders and Russian-occupied areas
@@ -195,20 +177,20 @@ def update_fire_details(marker_clicks):
 # Plot the number of fire events per day
 @app.callback(
     Output('fires-per-day-plot', 'figure'),
-    [Input('start-date-slider', 'value')]
+    [Input('fires-per-day-plot', 'clickData')]
 )
-def update_fires_per_day_plot(start_date_offset):
+def update_fires_per_day_plot(clickData):
     daily_fire_counts = fires_gdf['ACQ_DATE'].value_counts().sort_index()
-    selected_date = min_date + pd.Timedelta(days=start_date_offset)
-    selected_count = daily_fire_counts.get(selected_date, 0)
+    selected_date = pd.to_datetime(clickData['points'][0]['x']).date() if clickData else None
+    selected_count = daily_fire_counts.get(selected_date, 0) if selected_date else None
     max_fire_count = daily_fire_counts.max()
     
-    text_position = 'top center' if selected_count <= 0.5 * max_fire_count else 'bottom center'
+    text_position = 'top center' if selected_count and selected_count <= 0.5 * max_fire_count else 'bottom center'
     
     figure = go.Figure(data=[
         go.Scatter(x=daily_fire_counts.index, y=daily_fire_counts.values, mode='lines+markers', line=dict(width=2)),
         go.Scatter(
-            x=[selected_date], y=[selected_count],
+            x=[selected_date] if selected_date else [], y=[selected_count] if selected_count else [],
             mode='markers+text',
             marker=dict(size=10, color='red'),
             text=[f'<br>{selected_count} fires<br>'],
