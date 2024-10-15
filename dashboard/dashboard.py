@@ -63,13 +63,13 @@ app.layout = html.Div([
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
     html.Div([
-        html.Div(id='selected-date', style={"margin-bottom": "10px", "font-weight": "bold", "font-size": "16px"}),
+        html.Div(id='selected-date', style={"margin-bottom": "10px", "font-weight": "bold", "font-size": "16px", "color": "#003366"}),
         dcc.Graph(
             id='fires-per-day-plot',
             config={'displayModeBar': False},
             style={'height': '180px', 'margin-bottom': '0px'}
         ),
-    ], style={"position": "absolute", "bottom": "10px", "left": "5%", "right": "5%", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2}),
+    ], style={"position": "absolute", "bottom": "10px", "left": "5%", "right": "5%", "background-color": "#f0f0f0", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "border": "1px solid #cccccc"}),
 
     html.Div([
         dash_table.DataTable(
@@ -81,14 +81,14 @@ app.layout = html.Div([
                 {'name': 'Significance', 'id': 'SIGNIFICANCE_SCORE_DECAY'},
                 {'name': 'Fire Type', 'id': 'FIRE_TYPE'}
             ],
-            style_table={'width': '100%', 'margin': '0 auto', 'border': '1px solid #ddd', 'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.1)'},
-            style_cell={'textAlign': 'center', 'padding': '10px'},
-            style_header={'fontWeight': 'bold', 'backgroundColor': '#f9f9f9'},
+            style_table={'width': '100%', 'margin': '0 auto', 'border': '1px solid #003366', 'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.15)'},
+            style_cell={'textAlign': 'center', 'padding': '10px', 'font-family': 'Arial', 'font-size': '14px', 'color': '#003366'},
+            style_header={'fontWeight': 'bold', 'backgroundColor': '#e6e6e6'},
             style_data={'whiteSpace': 'normal', 'height': 'auto'},
             style_as_list_view=True,
             data=[],
         )
-    ], style={"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "none"}, id='fire-details-container'),
+    ], style={"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "none", "border": "1px solid #cccccc"}, id='fire-details-container'),
 
     html.Div(id='layer-log')
 ])
@@ -100,7 +100,7 @@ def generate_fire_markers(data):
         markers.append(dl.CircleMarker(
             center=[row.geometry.y, row.geometry.x],
             radius=5,
-            color='red',
+            color='#cc0000',
             fill=True,
             fillOpacity=0.6,
             id={'type': 'fire-marker', 'index': row.name},
@@ -159,7 +159,7 @@ def update_fire_details(marker_clicks):
         'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
     }]
     
-    return data, {"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "10px", "border-radius": "10px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.1)", "zIndex": 2, "display": "block"}
+    return data, {"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}
 
 # Plot the number of fire events per day
 @app.callback(
@@ -178,13 +178,13 @@ def update_fires_per_day_plot(clickData):
         go.Scatter(x=daily_fire_counts.index, 
                    y=daily_fire_counts.values, 
                    mode='lines+markers', 
-                   line=dict(width=2), 
+                   line=dict(width=2, color='#003366'), 
                    hovertemplate='%{x|%b %d, %Y}, Fire Count: %{y}',
                    ),
         go.Scatter(
             x=[selected_date] if selected_date else [], y=[selected_count] if selected_count else [],
             mode='markers+text',
-            marker=dict(size=10, color='red'),
+            marker=dict(size=10, color='#cc0000'),
             text=[f'<br>{selected_count} fires<br>'],
             textposition=text_position,
             textfont=dict(family='Arial', size=14, color='black'),
@@ -197,7 +197,8 @@ def update_fires_per_day_plot(clickData):
         yaxis_title='Number of Fires',
         margin=dict(l=40, r=40, t=20, b=0),
         height=160,
-        showlegend=False
+        showlegend=False,
+        plot_bgcolor='#f0f0f0'
     )
     return figure
 
