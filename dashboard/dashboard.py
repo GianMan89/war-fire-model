@@ -88,7 +88,7 @@ app.layout = html.Div([
             style_as_list_view=True,
             data=[],
         )
-    ], style={"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "none", "border": "1px solid #cccccc"}, id='fire-details-container'),
+    ], style={"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "none", "border": "1px solid #cccccc"}, id='fire-details-container'),
 
     html.Div(id='layer-log')
 ])
@@ -161,7 +161,7 @@ def update_fire_details(marker_clicks):
         'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
     }]
     
-    return data, {"position": "absolute", "top": "10px", "left": "100px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}
+    return data, {"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}
 
 # Plot the number of fire events per day
 @app.callback(
