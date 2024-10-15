@@ -71,7 +71,7 @@ app.layout = html.Div([
         dcc.Graph(
             id='fires-per-day-plot',
             config={'displayModeBar': False},
-            style={'height': '200px', 'margin-bottom': '0px'}
+            style={'height': '180px', 'margin-bottom': '0px', 'margin-top': '10px'}
         ),
         html.Label("Select Date", style={"font-weight": "bold", "font-size": "16px", "margin-top": "10px"}),
         dcc.Slider(
@@ -199,16 +199,28 @@ def update_fire_details(marker_clicks):
 )
 def update_fires_per_day_plot(start_date_offset):
     daily_fire_counts = fires_gdf['ACQ_DATE'].value_counts().sort_index()
+    selected_date = min_date + pd.Timedelta(days=start_date_offset)
+    selected_count = daily_fire_counts.get(selected_date, 0)
     
     figure = go.Figure(data=[
-        go.Scatter(x=daily_fire_counts.index, y=daily_fire_counts.values, mode='lines+markers', line=dict(width=2))
+        go.Scatter(x=daily_fire_counts.index, y=daily_fire_counts.values, mode='lines+markers', line=dict(width=2)),
+        go.Scatter(
+            x=[selected_date], y=[selected_count],
+            mode='markers+text',
+            marker=dict(size=10, color='red'),
+            text=[f'{selected_count} fires<br>'],
+            textposition='top center',
+            textfont=dict(family='Arial', size=16, color='black'),
+            texttemplate='<b>%{text}</b>',
+            hoverinfo='skip',
+        )
     ])
     figure.update_layout(
-        title='Number of Fire Events per Day',
         xaxis_title='Date',
         yaxis_title='Number of Fires',
-        margin=dict(l=40, r=40, t=40, b=0),
-        height=150
+        margin=dict(l=40, r=40, t=20, b=0),
+        height=160,
+        showlegend=False
     )
     return figure
 
