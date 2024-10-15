@@ -51,11 +51,11 @@ app.layout = html.Div([
                          name='OpenStreetMap', checked=True),
             dl.Overlay(dl.LayerGroup(id='ukraine-borders-layer', children=[
                 dl.GeoJSON(data=json.loads(ukraine_borders.to_json()),
-                           options=dict(style=dict(color='black', weight=3, opacity=1.0)))
+                           options=dict(style=dict(color='black', weight=3, opacity=1.0, fillOpacity=0.1)))
             ]), name='Ukraine Borders', checked=True),
             dl.Overlay(dl.LayerGroup(id='rus-control-layer', children=[
                 dl.GeoJSON(data=json.loads(rus_control.to_json()),
-                           options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.3, dashArray='5, 5')))
+                           options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.1, dashArray='5, 5')))
             ]), name='Russian-Occupied Areas', checked=True),
             dl.Overlay(dl.LayerGroup(id='significance-opacity-layer', children=[]), name='Use Significance for Opacity', checked=False)
         ]),
