@@ -118,7 +118,7 @@ def generate_fire_markers(data, use_significance_opacity):
         if use_significance_opacity:
             markers.append(dl.CircleMarker(
                 center=[row.geometry.y, row.geometry.x],
-                radius=10,
+                radius=8,
                 color='#cc0000',
                 fillColor='#cc0000',
                 fill=True,
@@ -131,11 +131,11 @@ def generate_fire_markers(data, use_significance_opacity):
         else:
             markers.append(dl.CircleMarker(
                 center=[row.geometry.y, row.geometry.x],
-                radius=10,
+                radius=8,
                 color='#cc0000',
                 fillColor='#cc0000',
                 fill=True,
-                fillOpacity=0.0,
+                fillOpacity=0.5,
                 opacity=1.0,
                 id={'type': 'fire-marker', 'index': row.name},
                 n_clicks=0,
@@ -255,7 +255,7 @@ def update_fire_details(marker_clicks):
 
     selected_fire_marker = dl.CircleMarker(
         center=[row.geometry.y, row.geometry.x],
-        radius=12,
+        radius=10,
         color='#6e57ce',
         fillColor='#6e57ce',
         fill=True,
