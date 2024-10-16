@@ -2,6 +2,7 @@ import os
 import sys
 import dash
 from dash import dcc, html, dash_table, Output, Input, State
+from dash import no_update
 import dash_leaflet as dl
 import pandas as pd
 import geopandas as gpd
@@ -299,55 +300,109 @@ def update_layers(clickData, overlays, prev_overlays):
 
 # Update the table with fire details based on marker click, and mark the selected fire on the map
 @app.callback(
-    [Output('fire-details-table', 'data'),
-     Output('fire-details-container', 'style'),
-     Output('selected-fire-layer', 'children')],
-    [Input({'type': 'fire-marker-significance', 'index': dash.dependencies.ALL}, 'n_clicks'),
-     Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks')],
+    [
+        Output('fire-details-table', 'data'),
+        Output('fire-details-container', 'style'),
+        Output('selected-fire-layer', 'children')
+    ],
+    [
+        Input({'type': 'fire-marker-significance', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input('fires-per-day-plot', 'clickData')  # Include clickData as an Input
+    ],
+    [
+        State('fire-details-table', 'data'),
+        State('fire-details-container', 'style'),
+        State('selected-fire-layer', 'children')
+    ],
     prevent_initial_call=True
 )
-def update_fire_details(marker_clicks_significance, marker_clicks):
+def update_fire_details(marker_clicks_significance, marker_clicks, clickData, current_data, current_style, current_selected_fire_marker):
     ctx = dash.callback_context
-    if not ctx.triggered or (all(click is None for click in marker_clicks) and all(click is None for click in marker_clicks_significance)):
-        return [], {'display': 'none'}, []
 
-    # Extract the triggering property ID and value
+    # If no input triggered the callback, do not update
+    if not ctx.triggered:
+        return no_update, no_update, no_update
+
+    # Get the property ID and value of the triggering input
     triggered_prop_id = ctx.triggered[0]['prop_id']
     triggered_value = ctx.triggered[0]['value']
 
-    # If the triggering value is None or 0, no actual click has occurred
-    if not triggered_value or triggered_value == 0:
+    # Check if the triggering input is the date change
+    if triggered_prop_id == 'fires-per-day-plot.clickData':
+        # The date has changed, reset the outputs
         return [], {'display': 'none'}, []
 
-    marker_id = triggered_prop_id.split('.')[0]
-    index = int(json.loads(marker_id)['index'])
-    row = fires_gdf.loc[index]
+    # Check if the triggering input is a marker click
+    elif triggered_prop_id.endswith('.n_clicks') and triggered_value and triggered_value > 0:
+        # Extract marker ID and index
+        marker_id_json = triggered_prop_id.split('.')[0]
+        marker_id = json.loads(marker_id_json)
+        index = marker_id['index']
+        marker_type = marker_id['type']
 
-    data = [{
-        'ACQ_DATE': str(row['ACQ_DATE']),
-        'LATITUDE': row['LATITUDE'],
-        'LONGITUDE': row['LONGITUDE'],
-        'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
-        'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
-    }]
+        # Retrieve the corresponding fire data
+        row = fires_gdf.loc[index]
 
-    selected_fire_marker = dl.CircleMarker(
-        center=[row.geometry.y, row.geometry.x],
-        radius=10,
-        color='#6e57ce',
-        fillColor='#6e57ce',
-        fill=True,
-        fillOpacity=0.8,
-        opacity=1.0,
-        id='selected-fire-marker',
-        children=[dl.Tooltip(
-                    content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
-                    direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
-                    pane='fire-tooltip-pane', id=f'selected-fire-tooltip-{marker_id}'
-                    )]
-    )
-    
-    return data, {"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}, [selected_fire_marker]
+        # Prepare data for the fire details table
+        data = [{
+            'ACQ_DATE': str(row['ACQ_DATE']),
+            'LATITUDE': row['LATITUDE'],
+            'LONGITUDE': row['LONGITUDE'],
+            'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
+            'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
+        }]
+
+        # Create the selected fire marker
+        selected_fire_marker = dl.CircleMarker(
+            center=[row.geometry.y, row.geometry.x],
+            radius=10,
+            color='#6e57ce',
+            fillColor='#6e57ce',
+            fill=True,
+            fillOpacity=0.8,
+            opacity=1.0,
+            id='selected-fire-marker',
+            children=[
+                dl.Tooltip(
+                    content=(
+                        f"Date: {row['ACQ_DATE']}<br>"
+                        f"Lat: {row['LATITUDE']}<br>"
+                        f"Lon: {row['LONGITUDE']}<br>"
+                        f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%"
+                    ),
+                    direction='auto',
+                    permanent=False,
+                    sticky=False,
+                    interactive=True,
+                    offset=[0, 0],
+                    opacity=0.9,
+                    pane='fire-tooltip-pane',
+                    id=f'selected-fire-tooltip-{marker_id_json}'
+                )
+            ]
+        )
+
+        # Define the style for the fire details container
+        style = {
+            "position": "absolute",
+            "top": "10px",
+            "left": "120px",
+            "background-color": "#ffffff",
+            "padding": "20px",
+            "border-radius": "5px",
+            "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)",
+            "zIndex": 2,
+            "display": "block",
+            "border": "1px solid #cccccc"
+        }
+
+        # Return updated outputs
+        return data, style, [selected_fire_marker]
+
+    else:
+        # Not triggered by a marker click or date change; do not update outputs
+        return no_update, no_update, no_update
 
 # Plot the number of fire events per day
 @app.callback(
