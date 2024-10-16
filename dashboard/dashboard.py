@@ -273,11 +273,15 @@ def update_fire_details(marker_clicks):
 )
 def update_fires_per_day_plot(clickData):
     daily_fire_counts = fires_gdf['ACQ_DATE'].value_counts().sort_index()
+    # Ensure all dates within the range have a count, filling missing dates with zero
+    all_dates = pd.date_range(start=min_date, end=max_date)
+    daily_fire_counts = daily_fire_counts.reindex(all_dates, fill_value=0)
+    daily_fire_counts.index = daily_fire_counts.index.date
     selected_date = pd.to_datetime(clickData['points'][0]['x']).date() if clickData else None
     selected_count = daily_fire_counts.get(selected_date, 0) if selected_date else None
     max_fire_count = daily_fire_counts.max()
     
-    text_position = 'top center' if selected_count and selected_count <= 0.5 * max_fire_count else 'bottom left'
+    text_position = 'top center' if (selected_count and selected_count <= 0.5 * max_fire_count) or selected_count == 0 else 'bottom left'
     
     figure = go.Figure(data=[
         go.Scatter(x=daily_fire_counts.index, 
@@ -287,7 +291,8 @@ def update_fires_per_day_plot(clickData):
                    hovertemplate='%{x|%b %d, %Y}, Fire Count: %{y}',
                    ),
         go.Scatter(
-            x=[selected_date] if selected_date else [], y=[selected_count] if selected_count else [],
+            x=[selected_date] if selected_date else [], 
+            y=[selected_count],# if selected_count else [],
             mode='markers+text',
             marker=dict(size=10, color='#cc0000'),
             text=[f'{selected_count} fires<br>'],
