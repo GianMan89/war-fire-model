@@ -126,7 +126,8 @@ def generate_fire_markers(data, use_significance_opacity):
                 opacity=0.0,
                 id={'type': 'fire-marker', 'index': row.name},
                 n_clicks=0,
-                interactive=True  # Makes the circle marker clickable
+                interactive=True,
+                children=[dl.Tooltip(content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%")]
             ))
         else:
             markers.append(dl.CircleMarker(
@@ -139,7 +140,8 @@ def generate_fire_markers(data, use_significance_opacity):
                 opacity=1.0,
                 id={'type': 'fire-marker', 'index': row.name},
                 n_clicks=0,
-                interactive=True  # Makes the circle marker clickable
+                interactive=True,
+                children=[dl.Tooltip(content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%")] 
             ))
     return markers
 
