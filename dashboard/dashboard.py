@@ -251,7 +251,15 @@ def update_fire_details(marker_clicks):
     if not ctx.triggered or all(click is None for click in marker_clicks):
         return [], {'display': 'none'}, []
 
-    marker_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    # Extract the triggering property ID and value
+    triggered_prop_id = ctx.triggered[0]['prop_id']
+    triggered_value = ctx.triggered[0]['value']
+
+    # If the triggering value is None or 0, no actual click has occurred
+    if not triggered_value or triggered_value == 0:
+        return [], {'display': 'none'}, []
+
+    marker_id = triggered_prop_id.split('.')[0]
     index = int(json.loads(marker_id)['index'])
     row = fires_gdf.loc[index]
 
