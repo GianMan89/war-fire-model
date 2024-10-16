@@ -84,13 +84,77 @@ app.layout = html.Div([
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
     html.Div([
-        html.Div(id='selected-date', style={"margin-bottom": "10px", "font-weight": "bold", "font-size": "16px", "color": "#003366", 'font-family': 'Arial'}),
+    # Container for selected date and slider
+        html.Div([
+            # Selected date text on the left
+            html.Div(id='selected-date', style={
+                "font-weight": "bold",
+                "font-size": "16px",
+                "color": "#003366",
+                'font-family': 'Arial',
+                "display": "inline-block",
+                "verticalAlign": "middle",
+                "width": "50%"  # Adjust the width as needed
+            }),
+
+            # Slider on the right
+            html.Div([
+                html.Label('Number of Clusters:', style={
+                    "font-weight": "bold",
+                    "font-size": "14px",
+                    "color": "#003366",
+                    'font-family': 'Arial',
+                    "margin-right": "10px"
+                }),
+                dcc.Input(
+                    id='n-clusters-input',
+                    type='number',
+                    min=1,
+                    max=500,  # Adjust max as needed
+                    value=10,  # Default value
+                    style={
+                        "width": "60px",
+                        "display": "inline-block",
+                        "verticalAlign": "middle"
+                    }
+                )
+            ], style={
+                "display": "inline-block",
+                "verticalAlign": "middle",
+                "width": "50%",
+                "textAlign": "right"
+            }),
+        ], style={
+            "width": "100%",
+            "display": "flex",
+            "justify-content": "space-between",
+            "alignItems": "center",
+            "margin-bottom": "10px"
+        }),
+
+        # The fires per day plot
         dcc.Graph(
             id='fires-per-day-plot',
             config={'displayModeBar': False},
-            style={'height': '180px', 'margin-bottom': '0px', 'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.15)', 'border': '1px solid #003366'}
+            style={
+                'height': '180px',
+                'margin-bottom': '0px',
+                'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.15)',
+                'border': '1px solid #003366'
+            }
         ),
-    ], style={"position": "absolute", "bottom": "10px", "left": "5%", "right": "5%", "background-color": "#e6e6e6", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "border": "1px solid #cccccc"}),
+    ], style={
+        "position": "absolute",
+        "bottom": "10px",
+        "left": "5%",
+        "right": "5%",
+        "background-color": "#e6e6e6",
+        "padding": "20px",
+        "border-radius": "5px",
+        "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)",
+        "zIndex": 2,
+        "border": "1px solid #cccccc"
+    }),
 
     html.Div([
         dash_table.DataTable(
@@ -109,9 +173,17 @@ app.layout = html.Div([
             style_as_list_view=True,
             data=[],
         )
-    ], style={"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "none", "border": "1px solid #cccccc"}, id='fire-details-container'),
-
-    html.Div(id='layer-log')
+    ], style={"position": "absolute", 
+              "top": "10px", 
+              "left": "120px", 
+              "background-color": "#ffffff", 
+              "padding": "20px", 
+              "border-radius": "5px", 
+              "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", 
+              "zIndex": 2, 
+              "display": "none", 
+              "border": "1px solid #cccccc"}, 
+              id='fire-details-container'),
 ])
 
 # Fire markers colored by their label
@@ -223,6 +295,10 @@ def generate_ukraine_temp_layer(selected_date):
     ]
 )
 def update_layers(clickData, overlays, prev_overlays):
+    # If no date is selected, do not update the map and print a message
+    if not clickData:
+        return dash.no_update, "Select a date from the plot.", dash.no_update, dash.no_update, dash.no_update
+    
     ctx = dash.callback_context
     if not ctx.triggered:
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
