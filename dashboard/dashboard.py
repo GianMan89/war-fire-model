@@ -127,7 +127,11 @@ def generate_fire_markers(data, use_significance_opacity):
                 id={'type': 'fire-marker', 'index': row.name},
                 n_clicks=0,
                 interactive=True,
-                children=[dl.Tooltip(content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%")]
+                children=[dl.Tooltip(
+                    content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%", 
+                    direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
+                    pane='selected-fire-pane',
+                    )]
             ))
         else:
             markers.append(dl.CircleMarker(
@@ -141,7 +145,11 @@ def generate_fire_markers(data, use_significance_opacity):
                 id={'type': 'fire-marker', 'index': row.name},
                 n_clicks=0,
                 interactive=True,
-                children=[dl.Tooltip(content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%")] 
+                children=[dl.Tooltip(
+                    content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
+                    direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
+                    pane='selected-fire-pane',
+                    )] 
             ))
     return markers
 
@@ -263,7 +271,7 @@ def update_fire_details(marker_clicks):
         fill=True,
         fillOpacity=0.8,
         opacity=1.0,
-        id='selected-fire-marker'
+        id='selected-fire-marker',
     )
     
     return data, {"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}, [selected_fire_marker]
