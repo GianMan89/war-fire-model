@@ -1,7 +1,7 @@
 import os
 import sys
 import dash
-from dash import dcc, html, dash_table, Output, Input
+from dash import dcc, html, dash_table, Output, Input, State
 import dash_leaflet as dl
 import pandas as pd
 import geopandas as gpd
@@ -58,6 +58,7 @@ ukraine_center = [48.3794, 31.1656]
 
 # Layout
 app.layout = html.Div([
+    dcc.Store(id='overlays-store', data=[]),
     dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
         dl.LayersControl(id='layers-control', position='topright', children=[
             dl.BaseLayer(dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
@@ -143,7 +144,7 @@ def generate_fire_markers(data, use_significance_opacity):
                 fill=True,
                 fillOpacity=0.5,
                 opacity=1.0,
-                id={'type': 'fire-marker', 'index': row.name},
+                id={'type': 'fire-marker-significance', 'index': row.name},
                 n_clicks=0,
                 interactive=True,
                 children=[dl.Tooltip(
@@ -205,38 +206,96 @@ def generate_ukraine_temp_layer(selected_date):
 
 # Load fires and update layers based on the selected date
 @app.callback(
-    [Output('fire-layer', 'children'),
-     Output('selected-date', 'children'),
-     Output('ukraine-cloud-layer', 'children'),
-     Output('ukraine-temp-layer', 'children')],
-    [Input('fires-per-day-plot', 'clickData'),
-     Input('layers-control', 'overlays')]
-)
-def update_layers(clickData, overlays):
-    if not clickData:
-        return [], "Select a date from the plot.", [], []
-    
-    selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
-    
-    # Filter data based on the selected date and abnormal label
-    filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
-    selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
-    use_significance_opacity = 'Use Significance for Opacity' in overlays
-    fire_markers = generate_fire_markers(filtered_data, use_significance_opacity)
-    ukraine_cloud_layer = generate_ukraine_cloud_layer(selected_date)
-    ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
-    return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer
-
-# Update the fire layer when overlay options change
-@app.callback(
-    [Output('fire-layer', 'children', allow_duplicate=True),
-     Output('selected-date', 'children', allow_duplicate=True), [], [],
+    [
+        Output('fire-layer', 'children'),
+        Output('selected-date', 'children'),
+        Output('ukraine-cloud-layer', 'children'),
+        Output('ukraine-temp-layer', 'children'),
+        Output('overlays-store', 'data')  # Update the stored overlays
     ],
-    [Input('layers-control', 'overlays')],
-    prevent_initial_call=True
+    [
+        Input('fires-per-day-plot', 'clickData'),
+        Input('layers-control', 'overlays')
+    ],
+    [
+        State('overlays-store', 'data')
+    ]
 )
-def refresh_layers(overlays):
-    return update_layers(None, overlays)
+def update_layers(clickData, overlays, prev_overlays):
+    ctx = dash.callback_context
+    if not ctx.triggered:
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+
+    # Initialize outputs
+    fire_markers = dash.no_update
+    selected_date_str = dash.no_update
+    ukraine_cloud_layer = dash.no_update
+    ukraine_temp_layer = dash.no_update
+
+    # Initialize prev_overlays if None
+    if prev_overlays is None:
+        prev_overlays = []
+
+    # Determine which Input triggered the callback
+    triggered_input = ctx.triggered[0]['prop_id'].split('.')[0]
+    # Convert overlays lists to sets for comparison
+    current_overlays_set = set(overlays) if overlays else set()
+    prev_overlays_set = set(prev_overlays) if prev_overlays else set()
+    # Determine overlays that were added or removed
+    added_overlays = current_overlays_set - prev_overlays_set
+    removed_overlays = prev_overlays_set - current_overlays_set
+    # Determine if 'Use Significance for Opacity' was toggled
+    significance_toggled = 'Use Significance for Opacity' in added_overlays or 'Use Significance for Opacity' in removed_overlays
+    # Determine if other overlays were toggled
+    cloud_layer_toggled = 'Ukraine Cloud Cover' in added_overlays or 'Ukraine Cloud Cover' in removed_overlays
+    temp_layer_toggled = 'Ukraine Mean Temperature' in added_overlays or 'Ukraine Mean Temperature' in removed_overlays
+
+    # Handle clickData changes
+    if triggered_input == 'fires-per-day-plot':
+        if not clickData:
+            return [], "Select a date from the plot.", [], [], overlays
+        selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+        selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
+        # Filter data based on the selected date
+        filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+        # Determine if 'Use Significance for Opacity' is in overlays
+        use_significance_opacity = 'Use Significance for Opacity' in overlays
+        # Generate fire markers
+        fire_markers = generate_fire_markers(filtered_data, use_significance_opacity)
+        # Update other layers
+        ukraine_cloud_layer = generate_ukraine_cloud_layer(selected_date)
+        ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
+    elif triggered_input == 'layers-control':
+        # Handle 'Use Significance for Opacity' toggle
+        if significance_toggled:
+            if clickData:
+                selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+                # Filter data based on the selected date
+                filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+                # Determine if 'Use Significance for Opacity' is in overlays
+                use_significance_opacity = 'Use Significance for Opacity' in overlays
+                # Generate fire markers
+                fire_markers = generate_fire_markers(filtered_data, use_significance_opacity)
+            else:
+                # No date selected, cannot update fire markers
+                pass
+        # Handle 'Ukraine Cloud Cover' toggle
+        if cloud_layer_toggled:
+            if clickData:
+                selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+                # Update cloud layer
+                ukraine_cloud_layer = generate_ukraine_cloud_layer(selected_date)
+        # Handle 'Ukraine Mean Temperature' toggle
+        if temp_layer_toggled:
+            if clickData:
+                selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+                # Update temperature layer
+                ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
+    else:
+        pass  # Other triggers
+
+    # Update the stored overlays
+    return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer, overlays
 
 # Update the table with fire details based on marker click, and mark the selected fire on the map
 @app.callback(
