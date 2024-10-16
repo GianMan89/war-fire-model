@@ -77,6 +77,7 @@ app.layout = html.Div([
         ]),
         dl.Pane(dl.LayerGroup(id='fire-layer', children=[]), name='fire-pane', style=dict(zIndex=500)),
         dl.Pane(dl.LayerGroup(id='selected-fire-layer', children=[]), name='selected-fire-pane', style=dict(zIndex=501)),
+        dl.Pane(dl.LayerGroup(id='fire-tooltip-layer', children=[]), name='fire-tooltip-pane', style=dict(zIndex=502)),
         dl.ScaleControl(position='topleft', metric=True, imperial=True)
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
@@ -130,7 +131,7 @@ def generate_fire_markers(data, use_significance_opacity):
                 children=[dl.Tooltip(
                     content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%", 
                     direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
-                    pane='selected-fire-pane',
+                    pane='fire-tooltip-pane',
                     )]
             ))
         else:
@@ -148,7 +149,7 @@ def generate_fire_markers(data, use_significance_opacity):
                 children=[dl.Tooltip(
                     content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
                     direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
-                    pane='selected-fire-pane',
+                    pane='fire-tooltip-pane',
                     )] 
             ))
     return markers
@@ -168,8 +169,8 @@ def generate_ukraine_cloud_layer(selected_date):
             data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
             options=dict(style=dict(color='black', weight=3, opacity=1.0, fillColor='darkgrey',
                                     fillOpacity=get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date))),
-                                    children=[dl.Tooltip(content=f"Cloud Cover: {round(get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date) * 100, 2)}%", 
-                                                         direction='auto', permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9)]
+            children=[dl.Tooltip(content=f"Cloud Cover: {round(get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date) * 100, 2)}%", 
+                                    direction='auto', permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9)]
         ) for i in range(len(ukraine_borders))
     ]
     return layers
