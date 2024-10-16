@@ -126,7 +126,7 @@ def generate_fire_markers(data, use_significance_opacity):
                 fill=True,
                 fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'],
                 opacity=0.0,
-                id={'type': 'fire-marker', 'index': row.name},
+                id={'type': 'fire-marker-significance', 'index': row.name},
                 n_clicks=0,
                 interactive=True,
                 children=[dl.Tooltip(
@@ -144,7 +144,7 @@ def generate_fire_markers(data, use_significance_opacity):
                 fill=True,
                 fillOpacity=0.5,
                 opacity=1.0,
-                id={'type': 'fire-marker-significance', 'index': row.name},
+                id={'type': 'fire-marker', 'index': row.name},
                 n_clicks=0,
                 interactive=True,
                 children=[dl.Tooltip(
@@ -302,12 +302,13 @@ def update_layers(clickData, overlays, prev_overlays):
     [Output('fire-details-table', 'data'),
      Output('fire-details-container', 'style'),
      Output('selected-fire-layer', 'children')],
-    [Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks')],
+    [Input({'type': 'fire-marker-significance', 'index': dash.dependencies.ALL}, 'n_clicks'),
+     Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks')],
     prevent_initial_call=True
 )
-def update_fire_details(marker_clicks):
+def update_fire_details(marker_clicks_significance, marker_clicks):
     ctx = dash.callback_context
-    if not ctx.triggered or all(click is None for click in marker_clicks):
+    if not ctx.triggered or (all(click is None for click in marker_clicks) and all(click is None for click in marker_clicks_significance)):
         return [], {'display': 'none'}, []
 
     # Extract the triggering property ID and value
