@@ -222,15 +222,6 @@ def update_layers(clickData, overlays):
     ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
     return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer
 
-# Log the base layer and overlay selections
-@app.callback(
-    Output('layer-log', 'children'),
-    [Input('layers-control', 'baseLayer'), Input('layers-control', 'overlays')],
-    prevent_initial_call=True
-)
-def log_layers(base_layer, overlays):
-    return f"Base layer is {base_layer}, selected overlay(s): {json.dumps(overlays)}"
-
 # Update the fire layer when overlay options change
 @app.callback(
     [Output('fire-layer', 'children', allow_duplicate=True),
