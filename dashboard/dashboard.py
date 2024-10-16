@@ -167,7 +167,9 @@ def generate_ukraine_cloud_layer(selected_date):
         dl.GeoJSON(
             data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
             options=dict(style=dict(color='black', weight=3, opacity=1.0, fillColor='darkgrey',
-                                    fillOpacity=get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date)))
+                                    fillOpacity=get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date))),
+                                    children=[dl.Tooltip(content=f"Cloud Cover: {round(get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date) * 100, 2)}%", 
+                                                         direction='auto', permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9)]
         ) for i in range(len(ukraine_borders))
     ]
     return layers
@@ -189,7 +191,9 @@ def generate_ukraine_temp_layer(selected_date):
         dl.GeoJSON(
             data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
             options=dict(style=dict(fillColor=mcolors.to_hex(cmap(norm(temperatures[i]))), 
-                                    color='black', weight=3, opacity=1.0, fillOpacity=0.8))
+                                    color='black', weight=3, opacity=1.0, fillOpacity=0.8)),
+            children=[dl.Tooltip(content=f"Temperature: {round(temperatures[i], 2)}°C", direction='auto', 
+                                 permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9)]
         ) for i in range(len(ukraine_borders))
     ]
     return layers
