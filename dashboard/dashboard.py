@@ -150,7 +150,7 @@ def generate_fire_markers(data, use_significance_opacity):
                     content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
                     direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
                     pane='fire-tooltip-pane',
-                    )] 
+                    )]
             ))
     return markers
 
@@ -166,11 +166,13 @@ def get_cloud_cover_opacity(oblast_id, acq_date):
 def generate_ukraine_cloud_layer(selected_date):
     layers = [
         dl.GeoJSON(
+            id=f'cloud-geojson-{i}-{selected_date}',
             data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
             options=dict(style=dict(color='black', weight=3, opacity=1.0, fillColor='darkgrey',
                                     fillOpacity=get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date))),
             children=[dl.Tooltip(content=f"Cloud Cover: {round(get_cloud_cover_opacity(ukraine_borders.iloc[i]['id'], selected_date) * 100, 2)}%", 
-                                    direction='auto', permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9)]
+                                    direction='auto', permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9,
+                                    id=f'cloud-tooltip-{i}-{selected_date}')]
         ) for i in range(len(ukraine_borders))
     ]
     return layers
@@ -190,11 +192,13 @@ def generate_ukraine_temp_layer(selected_date):
 
     layers = [
         dl.GeoJSON(
+            id=f'temp-geojson-{i}-{selected_date}',
             data=json.loads(ukraine_borders.iloc[i:i+1].to_json()),
             options=dict(style=dict(fillColor=mcolors.to_hex(cmap(norm(temperatures[i]))), 
                                     color='black', weight=3, opacity=1.0, fillOpacity=0.8)),
             children=[dl.Tooltip(content=f"Temperature: {round(temperatures[i], 2)}°C", direction='auto', 
-                                 permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9)]
+                                 permanent=False, sticky=True, interactive=True, offset=[0, 0], opacity=0.9,
+                                 id=f'temp-tooltip-{i}-{selected_date}')]
         ) for i in range(len(ukraine_borders))
     ]
     return layers
@@ -268,6 +272,11 @@ def update_fire_details(marker_clicks):
         fillOpacity=0.8,
         opacity=1.0,
         id='selected-fire-marker',
+        children=[dl.Tooltip(
+                    content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
+                    direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
+                    pane='fire-tooltip-pane', id=f'selected-fire-tooltip-{marker_id}'
+                    )]
     )
     
     return data, {"position": "absolute", "top": "10px", "left": "120px", "background-color": "#ffffff", "padding": "20px", "border-radius": "5px", "box-shadow": "0px 4px 8px rgba(0, 0, 0, 0.15)", "zIndex": 2, "display": "block", "border": "1px solid #cccccc"}, [selected_fire_marker]
