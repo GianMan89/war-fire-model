@@ -118,7 +118,7 @@ app.layout = html.Div([
             html.Div([
                 html.Label('Number of Clusters:', style={
                     "font-weight": "bold",
-                    "font-size": "14px",
+                    "font-size": "16px",
                     "color": "#003366",
                     'font-family': 'Arial',
                     "margin-right": "10px"
@@ -132,7 +132,10 @@ app.layout = html.Div([
                     style={
                         "width": "60px",
                         "display": "inline-block",
-                        "verticalAlign": "middle"
+                        "verticalAlign": "middle",
+                        "font-family": "Arial",
+                        "font-size": "16px",
+                        "margin-bottom": "5px"
                     }
                 )
             ], style={
@@ -181,7 +184,8 @@ app.layout = html.Div([
                 {'name': 'Latitude', 'id': 'LATITUDE'},
                 {'name': 'Longitude', 'id': 'LONGITUDE'},
                 {'name': 'Significance', 'id': 'SIGNIFICANCE_SCORE_DECAY'},
-                {'name': 'Fire Type', 'id': 'FIRE_TYPE'}
+                {'name': 'Fire Type', 'id': 'FIRE_TYPE'},
+                {'name': 'Cluster Size', 'id': 'CLUSTER_SIZE'}
             ],
             style_table={'width': '100%', 'margin': '0 auto', 'border': '1px solid #003366', 'box-shadow': '0px 4px 10px rgba(0, 0, 0, 0.15)'},
             style_cell={'textAlign': 'center', 'padding': '10px', 'font-family': 'Arial', 'font-size': '14px', 'color': '#003366'},
@@ -219,14 +223,15 @@ def generate_fire_markers_without_clustering(data, use_significance_opacity):
             fillColor='#cc0000',
             fill=True,
             fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'] if use_significance_opacity else 0.5,
-            opacity=1.0,
+            opacity=0.0 if use_significance_opacity else 1.0,
             id={'type': 'fire-marker', 'index': row.name},
             n_clicks=0,
             interactive=True,
             children=[dl.Tooltip(
-                content=f"Date: {row['ACQ_DATE']}<br>"
-                        f"Lat: {row['LATITUDE']}<br>"
-                        f"Lon: {row['LONGITUDE']}<br>"
+                content=f"Single fire<br>"
+                        f"Date: {row['ACQ_DATE']}<br>"
+                        f"Lat: {round(row['LATITUDE'], 4)}<br>"
+                        f"Lon: {round(row['LONGITUDE'], 4)}<br>"
                         f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
                 direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
                 pane='fire-tooltip-pane',
@@ -272,13 +277,16 @@ def generate_fire_markers(data, use_significance_opacity, n_clusters):
             fillColor='#cc0000',
             fill=True,
             fillOpacity=mean_significance if use_significance_opacity else 0.5,
-            opacity=1.0,
+            opacity=0.0 if use_significance_opacity else 1.0,
             id={'type': 'fire-cluster-marker', 'index': int(cluster_label)},
             n_clicks=0,
             interactive=True,
             children=[dl.Tooltip(
                 content=(
-                    f"Cluster of {num_fires} fires<br>"
+                    [f"Cluster of {num_fires} fires<br>" if num_fires > 1 else "Single fire<br>"][0] +
+                    f"Date: {cluster_data['ACQ_DATE'].iloc[0]}<br>"
+                    f"Lat: {round(cluster_center_lat, 4)}<br>"
+                    f"Lon: {round(cluster_center_lon, 4)}<br>"
                     f"Mean Significance: {round(mean_significance * 100, 2)}%"
                 ),
                 direction='auto',
@@ -408,7 +416,7 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
         if not clickData:
             return [], "Select a date from the plot.", [], [], overlays
         selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
-        selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}"
+        selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}, Number of Abnormal Fires: {len(fires_gdf[fires_gdf['ACQ_DATE'] == selected_date])}"
         # Filter data based on the selected date
         filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
         # Determine if 'Use Significance for Opacity' is in overlays
@@ -531,7 +539,9 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
     ],
     prevent_initial_call=True
 )
-def update_fire_details(marker_clicks_significance, marker_clicks, cluster_marker_clicks, clickData, current_data, current_style, current_selected_fire_marker, n_clusters):
+def update_fire_details(marker_clicks_significance, marker_clicks, 
+                        cluster_marker_clicks, clickData, current_data, 
+                        current_style, current_selected_fire_marker, n_clusters):
     ctx = dash.callback_context
 
     if not ctx.triggered:
@@ -565,10 +575,11 @@ def update_fire_details(marker_clicks_significance, marker_clicks, cluster_marke
             # Prepare data
             data = [{
                 'ACQ_DATE': str(selected_date),
-                'LATITUDE': cluster_data.geometry.y.mean(),
-                'LONGITUDE': cluster_data.geometry.x.mean(),
+                'LATITUDE': round(cluster_data.geometry.y.mean(), 4),
+                'LONGITUDE': round(cluster_data.geometry.x.mean(), 4),
                 'SIGNIFICANCE_SCORE_DECAY': f"{round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%",
-                'FIRE_TYPE': f"Cluster of {len(cluster_data)} fires"
+                'FIRE_TYPE': "War-related", # if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related",
+                'CLUSTER_SIZE': f"Cluster of {len(cluster_data)} fires" if len(cluster_data) > 1 else "Single fire"
             }]
 
             # Create selected cluster marker
@@ -584,7 +595,10 @@ def update_fire_details(marker_clicks_significance, marker_clicks, cluster_marke
                 children=[
                     dl.Tooltip(
                         content=(
-                            f"Cluster of {len(cluster_data)} fires<br>"
+                            [f"Cluster of {len(cluster_data)} fires<br>" if len(cluster_data) > 1 else "Single fire<br>"][0] +
+                            f"Date: {data[0]['ACQ_DATE']}<br>"
+                            f"Lat: {round(cluster_data.geometry.y.mean(), 4)}<br>"
+                            f"Lon: {round(cluster_data.geometry.x.mean(), 4)}<br>"
                             f"Mean Significance: {round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%"
                         ),
                         direction='auto',
@@ -603,10 +617,11 @@ def update_fire_details(marker_clicks_significance, marker_clicks, cluster_marke
             row = fires_gdf.loc[index]
             data = [{
                 'ACQ_DATE': str(row['ACQ_DATE']),
-                'LATITUDE': row['LATITUDE'],
-                'LONGITUDE': row['LONGITUDE'],
+                'LATITUDE': round(row['LATITUDE'], 4),
+                'LONGITUDE': round(row['LONGITUDE'], 4),
                 'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
-                'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
+                'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related",
+                'CLUSTER_SIZE': "Single fire"
             }]
             selected_fire_marker = dl.CircleMarker(
                 center=[row.geometry.y, row.geometry.x],
@@ -620,9 +635,10 @@ def update_fire_details(marker_clicks_significance, marker_clicks, cluster_marke
                 children=[
                     dl.Tooltip(
                         content=(
+                            f"Single fire<br>"
                             f"Date: {row['ACQ_DATE']}<br>"
-                            f"Lat: {row['LATITUDE']}<br>"
-                            f"Lon: {row['LONGITUDE']}<br>"
+                            f"Lat: {round(row['LATITUDE'], 4)}<br>"
+                            f"Lon: {round(row['LONGITUDE'], 4)}<br>"
                             f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%"
                         ),
                         direction='auto',
@@ -669,26 +685,20 @@ def update_fires_per_day_plot(clickData):
     daily_fire_counts.index = daily_fire_counts.index.date
     selected_date = pd.to_datetime(clickData['points'][0]['x']).date() if clickData else None
     selected_count = daily_fire_counts.get(selected_date, 0) if selected_date else None
-    max_fire_count = daily_fire_counts.max()
-    
-    text_position = 'top center' if (selected_count and selected_count <= 0.5 * max_fire_count) or selected_count == 0 else 'bottom left'
-    
+        
     figure = go.Figure(data=[
         go.Scatter(x=daily_fire_counts.index, 
                    y=daily_fire_counts.values, 
                    mode='lines+markers', 
                    line=dict(width=2, color='#003366'), 
                    hovertemplate='%{x|%b %d, %Y}, Fire Count: %{y}',
+                   name=''
                    ),
         go.Scatter(
             x=[selected_date] if selected_date else [], 
-            y=[selected_count],# if selected_count else [],
+            y=[selected_count],
             mode='markers+text',
             marker=dict(size=10, color='#cc0000'),
-            text=[f'{selected_count} fires<br>'],
-            textposition=text_position,
-            textfont=dict(family='Arial', size=14, color='black'),
-            texttemplate='<b>%{text}</b>',
             hoverinfo='skip',
         )
     ])
