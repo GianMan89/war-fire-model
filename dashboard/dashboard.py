@@ -224,7 +224,7 @@ def generate_fire_markers_without_clustering(data, use_significance_opacity):
             fill=True,
             fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'] if use_significance_opacity else 0.5,
             opacity=0.0 if use_significance_opacity else 1.0,
-            id={'type': 'fire-marker', 'index': row.name},
+            id={'type': 'fire-marker', 'index': row.name, 'significance_opt': use_significance_opacity},
             n_clicks=0,
             interactive=True,
             children=[dl.Tooltip(
@@ -278,7 +278,7 @@ def generate_fire_markers(data, use_significance_opacity, n_clusters):
             fill=True,
             fillOpacity=mean_significance if use_significance_opacity else 0.5,
             opacity=0.0 if use_significance_opacity else 1.0,
-            id={'type': 'fire-cluster-marker', 'index': int(cluster_label)},
+            id={'type': 'fire-cluster-marker', 'index': int(cluster_label), 'significance_opt': use_significance_opacity},
             n_clicks=0,
             interactive=True,
             children=[dl.Tooltip(
@@ -287,7 +287,7 @@ def generate_fire_markers(data, use_significance_opacity, n_clusters):
                     f"Date: {cluster_data['ACQ_DATE'].iloc[0]}<br>"
                     f"Lat: {round(cluster_center_lat, 4)}<br>"
                     f"Lon: {round(cluster_center_lon, 4)}<br>"
-                    f"Mean Significance: {round(mean_significance * 100, 2)}%"
+                    f"{["Mean Significance" if num_fires > 1 else "Significance"][0]}: {round(mean_significance * 100, 2)}%"
                 ),
                 direction='auto',
                 permanent=False,
@@ -371,7 +371,6 @@ def generate_ukraine_temp_layer(selected_date):
     ]
 )
 def update_layers(clickData, overlays, n_clusters, prev_overlays):
-
     # Handle n_clusters being None or invalid
     if n_clusters is None or n_clusters < 1:
         n_clusters = 10  # Default value
@@ -526,9 +525,8 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
         Output('selected-fire-layer', 'children')
     ],
     [
-        Input({'type': 'fire-marker-significance', 'index': dash.dependencies.ALL}, 'n_clicks'),
-        Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks'),
-        Input({'type': 'fire-cluster-marker', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'fire-marker', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'fire-cluster-marker', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
         Input('fires-per-day-plot', 'clickData')
     ],
     [
@@ -539,8 +537,7 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
     ],
     prevent_initial_call=True
 )
-def update_fire_details(marker_clicks_significance, marker_clicks, 
-                        cluster_marker_clicks, clickData, current_data, 
+def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, current_data, 
                         current_style, current_selected_fire_marker, n_clusters):
     ctx = dash.callback_context
 
@@ -596,10 +593,10 @@ def update_fire_details(marker_clicks_significance, marker_clicks,
                     dl.Tooltip(
                         content=(
                             [f"Cluster of {len(cluster_data)} fires<br>" if len(cluster_data) > 1 else "Single fire<br>"][0] +
-                            f"Date: {data[0]['ACQ_DATE']}<br>"
-                            f"Lat: {round(cluster_data.geometry.y.mean(), 4)}<br>"
-                            f"Lon: {round(cluster_data.geometry.x.mean(), 4)}<br>"
-                            f"Mean Significance: {round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%"
+                            f"Date: {data[0]['ACQ_DATE']}<br>" +
+                            f"Lat: {round(cluster_data.geometry.y.mean(), 4)}<br>" +
+                            f"Lon: {round(cluster_data.geometry.x.mean(), 4)}<br>" +
+                            [f"{["Mean Significance" if len(cluster_data) > 1 else "Significance"][0]}: {round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%"][0]
                         ),
                         direction='auto',
                         permanent=False,
