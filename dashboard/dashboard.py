@@ -1,9 +1,12 @@
 import os
 import sys
+import ast
 import dash
 from dash import dcc, html, dash_table, Output, Input, State
 from dash import no_update
 import dash_leaflet as dl
+from sklearn.cluster import KMeans
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 import json
@@ -50,17 +53,26 @@ weather_data = DataLoader.load_weather_data(min_date, max_date)
 min_temp = weather_data['TEMPERATURE_2M_MEAN (°C)'].min()
 max_temp = weather_data['TEMPERATURE_2M_MEAN (°C)'].max()
 
+# Load UK MOD maps data
+uk_mod_maps = pd.read_csv('data/ukr_war_events/ukr_img_overlays.csv')
+# Convert date columns to datetime
+uk_mod_maps['start_date'] = pd.to_datetime(uk_mod_maps['start_date']).dt.date
+uk_mod_maps['end_date'] = pd.to_datetime(uk_mod_maps['end_date']).dt.date
+# Parse the bounds from string to list
+uk_mod_maps['bounds'] = uk_mod_maps['bounds'].apply(ast.literal_eval)
+
 # Initialize Dash app
 app = dash.Dash(__name__)
 app.title = "Ukraine Forest Fires Dashboard"
 
 # Map of Ukraine
 ukraine_center = [48.3794, 31.1656]
+max_bounds = [[42.0, 20.0], [54.0, 42.0]]
 
 # Layout
 app.layout = html.Div([
     dcc.Store(id='overlays-store', data=[]),
-    dl.Map(id='fire-map', center=ukraine_center, zoom=6, children=[
+    dl.Map(id='fire-map', center=ukraine_center, zoom=6, minZoom=6, maxBounds=max_bounds, children=[
         dl.LayersControl(id='layers-control', position='topright', children=[
             dl.BaseLayer(dl.TileLayer(url='https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
                                      attribution='Map data © OpenStreetMap contributors', detectRetina=True),
@@ -75,12 +87,17 @@ app.layout = html.Div([
                 dl.GeoJSON(data=json.loads(rus_control.to_json()),
                            options=dict(style=dict(color='red', weight=2, fill=True, fillColor='red', fillOpacity=0.1, dashArray='5, 5')))
             ]), name='Russian-Occupied Areas', checked=True),
-            dl.Overlay(dl.LayerGroup(id='significance-opacity-layer', children=[]), name='Use Significance for Opacity', checked=False)
+            dl.Overlay(dl.LayerGroup(id='significance-opacity-layer', children=[]), name='Use Significance for Opacity', checked=False),
+            dl.Overlay(
+                dl.LayerGroup(id='uk-mod-map-layer', children=[]),
+                name='UK MOD Map',
+                checked=False
+            ),
         ]),
         dl.Pane(dl.LayerGroup(id='fire-layer', children=[]), name='fire-pane', style=dict(zIndex=500)),
         dl.Pane(dl.LayerGroup(id='selected-fire-layer', children=[]), name='selected-fire-pane', style=dict(zIndex=501)),
         dl.Pane(dl.LayerGroup(id='fire-tooltip-layer', children=[]), name='fire-tooltip-pane', style=dict(zIndex=502)),
-        dl.ScaleControl(position='topleft', metric=True, imperial=True)
+        dl.ScaleControl(position='topleft', metric=True, imperial=True),
     ], style={"width": "100vw", "height": "100vh", "position": "absolute", "top": 0, "left": 0, "zIndex": 1}),
 
     html.Div([
@@ -111,7 +128,7 @@ app.layout = html.Div([
                     type='number',
                     min=1,
                     max=500,  # Adjust max as needed
-                    value=10,  # Default value
+                    value=500,  # Default value
                     style={
                         "width": "60px",
                         "display": "inline-block",
@@ -186,47 +203,96 @@ app.layout = html.Div([
               id='fire-details-container'),
 ])
 
-# Fire markers colored by their label
-def generate_fire_markers(data, use_significance_opacity):
+def get_marker_size(num_fires):
+    # Adjust this function to scale marker sizes appropriately
+    base_size = 5
+    size = base_size + np.log1p(num_fires) * 2  # Logarithmic scaling
+    return size
+
+def generate_fire_markers_without_clustering(data, use_significance_opacity):
     markers = []
     for _, row in data.iterrows():
-        if use_significance_opacity:
-            markers.append(dl.CircleMarker(
-                center=[row.geometry.y, row.geometry.x],
-                radius=8,
-                color='#cc0000',
-                fillColor='#cc0000',
-                fill=True,
-                fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'],
-                opacity=0.0,
-                id={'type': 'fire-marker-significance', 'index': row.name},
-                n_clicks=0,
-                interactive=True,
-                children=[dl.Tooltip(
-                    content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%", 
-                    direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
-                    pane='fire-tooltip-pane',
-                    )]
-            ))
-        else:
-            markers.append(dl.CircleMarker(
-                center=[row.geometry.y, row.geometry.x],
-                radius=8,
-                color='#cc0000',
-                fillColor='#cc0000',
-                fill=True,
-                fillOpacity=0.5,
-                opacity=1.0,
-                id={'type': 'fire-marker', 'index': row.name},
-                n_clicks=0,
-                interactive=True,
-                children=[dl.Tooltip(
-                    content=f"Date: {row['ACQ_DATE']}<br>Lat: {row['LATITUDE']}<br>Lon: {row['LONGITUDE']}<br>Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
-                    direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
-                    pane='fire-tooltip-pane',
-                    )]
-            ))
+        markers.append(dl.CircleMarker(
+            center=[row.geometry.y, row.geometry.x],
+            radius=8,
+            color='#cc0000',
+            fillColor='#cc0000',
+            fill=True,
+            fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'] if use_significance_opacity else 0.5,
+            opacity=1.0,
+            id={'type': 'fire-marker', 'index': row.name},
+            n_clicks=0,
+            interactive=True,
+            children=[dl.Tooltip(
+                content=f"Date: {row['ACQ_DATE']}<br>"
+                        f"Lat: {row['LATITUDE']}<br>"
+                        f"Lon: {row['LONGITUDE']}<br>"
+                        f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
+                direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
+                pane='fire-tooltip-pane',
+            )]
+        ))
     return markers
+
+# Fire markers colored by their label
+def generate_fire_markers(data, use_significance_opacity, n_clusters):
+    # If the number of fires is less than or equal to n_clusters, skip clustering
+    if len(data) <= n_clusters or n_clusters <= 1:
+        return generate_fire_markers_without_clustering(data, use_significance_opacity)
+    
+    # Prepare data for clustering
+    coords = np.array([[row.geometry.y, row.geometry.x] for idx, row in data.iterrows()])
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0)
+    kmeans.fit(coords)
+    data['cluster'] = kmeans.labels_
+    
+    # Group data by clusters
+    cluster_groups = data.groupby('cluster')
+    
+    markers = []
+    for cluster_label, cluster_data in cluster_groups:
+        # Cluster center coordinates
+        cluster_center_lat = cluster_data.geometry.y.mean()
+        cluster_center_lon = cluster_data.geometry.x.mean()
+        
+        # Mean significance score
+        mean_significance = cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean()
+        
+        # Number of fires in the cluster
+        num_fires = len(cluster_data)
+        
+        # Determine marker size based on the number of fires
+        marker_size = get_marker_size(num_fires)
+        
+        # Create cluster marker
+        marker = dl.CircleMarker(
+            center=[cluster_center_lat, cluster_center_lon],
+            radius=marker_size,
+            color='#cc0000',
+            fillColor='#cc0000',
+            fill=True,
+            fillOpacity=mean_significance if use_significance_opacity else 0.5,
+            opacity=1.0,
+            id={'type': 'fire-cluster-marker', 'index': int(cluster_label)},
+            n_clicks=0,
+            interactive=True,
+            children=[dl.Tooltip(
+                content=(
+                    f"Cluster of {num_fires} fires<br>"
+                    f"Mean Significance: {round(mean_significance * 100, 2)}%"
+                ),
+                direction='auto',
+                permanent=False,
+                sticky=False,
+                interactive=True,
+                offset=[0, 0],
+                opacity=0.9,
+                pane='fire-tooltip-pane',
+            )]
+        )
+        markers.append(marker)
+    return markers
+
 
 
 # Function to get cloud cover opacity for a specific oblast and date
@@ -284,30 +350,38 @@ def generate_ukraine_temp_layer(selected_date):
         Output('selected-date', 'children'),
         Output('ukraine-cloud-layer', 'children'),
         Output('ukraine-temp-layer', 'children'),
-        Output('overlays-store', 'data')  # Update the stored overlays
+        Output('uk-mod-map-layer', 'children'),  # New output
+        Output('overlays-store', 'data')
     ],
     [
         Input('fires-per-day-plot', 'clickData'),
-        Input('layers-control', 'overlays')
+        Input('layers-control', 'overlays'),
+        Input('n-clusters-input', 'value')
     ],
     [
         State('overlays-store', 'data')
     ]
 )
-def update_layers(clickData, overlays, prev_overlays):
+def update_layers(clickData, overlays, n_clusters, prev_overlays):
+
+    # Handle n_clusters being None or invalid
+    if n_clusters is None or n_clusters < 1:
+        n_clusters = 10  # Default value
+
     # If no date is selected, do not update the map and print a message
     if not clickData:
-        return dash.no_update, "Select a date from the plot.", dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, "Select a date from the plot.", dash.no_update, dash.no_update, dash.no_update, dash.no_update
     
     ctx = dash.callback_context
     if not ctx.triggered:
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
     # Initialize outputs
     fire_markers = dash.no_update
     selected_date_str = dash.no_update
     ukraine_cloud_layer = dash.no_update
     ukraine_temp_layer = dash.no_update
+    uk_mod_map_layer = dash.no_update
 
     # Initialize prev_overlays if None
     if prev_overlays is None:
@@ -326,6 +400,8 @@ def update_layers(clickData, overlays, prev_overlays):
     # Determine if other overlays were toggled
     cloud_layer_toggled = 'Ukraine Cloud Cover' in added_overlays or 'Ukraine Cloud Cover' in removed_overlays
     temp_layer_toggled = 'Ukraine Mean Temperature' in added_overlays or 'Ukraine Mean Temperature' in removed_overlays
+    # Determine if 'UK MOD Map' overlay is toggled
+    uk_mod_map_toggled = 'UK MOD Map' in added_overlays or 'UK MOD Map' in removed_overlays
 
     # Handle clickData changes
     if triggered_input == 'fires-per-day-plot':
@@ -338,10 +414,26 @@ def update_layers(clickData, overlays, prev_overlays):
         # Determine if 'Use Significance for Opacity' is in overlays
         use_significance_opacity = 'Use Significance for Opacity' in overlays
         # Generate fire markers
-        fire_markers = generate_fire_markers(filtered_data, use_significance_opacity)
+        fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters)
         # Update other layers
         ukraine_cloud_layer = generate_ukraine_cloud_layer(selected_date)
         ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
+        # Update UK MOD Map layer if it's enabled
+        if 'UK MOD Map' in overlays:
+            map_row = uk_mod_maps[(uk_mod_maps['start_date'] <= selected_date) & (uk_mod_maps['end_date'] >= selected_date)]
+            if not map_row.empty:
+                map_info = map_row.iloc[0]
+                image_overlay = dl.ImageOverlay(
+                    url=map_info['url'],
+                    bounds=map_info['bounds'],
+                    opacity=0.7,
+                    id='uk-mod-image-overlay'
+                )
+                uk_mod_map_layer = [image_overlay]
+            else:
+                uk_mod_map_layer = []
+        else:
+            uk_mod_map_layer = []
     elif triggered_input == 'layers-control':
         # Handle 'Use Significance for Opacity' toggle
         if significance_toggled:
@@ -352,7 +444,7 @@ def update_layers(clickData, overlays, prev_overlays):
                 # Determine if 'Use Significance for Opacity' is in overlays
                 use_significance_opacity = 'Use Significance for Opacity' in overlays
                 # Generate fire markers
-                fire_markers = generate_fire_markers(filtered_data, use_significance_opacity)
+                fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters)
             else:
                 # No date selected, cannot update fire markers
                 pass
@@ -368,11 +460,55 @@ def update_layers(clickData, overlays, prev_overlays):
                 selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
                 # Update temperature layer
                 ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
+        if uk_mod_map_toggled:
+            if 'UK MOD Map' in overlays and clickData:
+                selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+                map_row = uk_mod_maps[(uk_mod_maps['start_date'] <= selected_date) & (uk_mod_maps['end_date'] >= selected_date)]
+                if not map_row.empty:
+                    map_info = map_row.iloc[0]
+                    image_overlay = dl.ImageOverlay(
+                        url=map_info['url'],
+                        bounds=map_info['bounds'],
+                        opacity=0.7,
+                        id='uk-mod-image-overlay'
+                    )
+                    uk_mod_map_layer = [image_overlay]
+                else:
+                    uk_mod_map_layer = []
+            else:
+                uk_mod_map_layer = []
     else:
         pass  # Other triggers
 
+    # Handle 'UK MOD Map' overlay
+    if 'UK MOD Map' in overlays:
+        if clickData:
+            selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+            # Find the map that corresponds to the selected date
+            map_row = uk_mod_maps[(uk_mod_maps['start_date'] <= selected_date) & (uk_mod_maps['end_date'] >= selected_date)]
+            if not map_row.empty:
+                # Get the first matching map (assuming no overlaps)
+                map_info = map_row.iloc[0]
+                # Create the ImageOverlay
+                image_overlay = dl.ImageOverlay(
+                    url=map_info['url'],
+                    bounds=map_info['bounds'],
+                    opacity=0.7,
+                    id='uk-mod-image-overlay'
+                )
+                uk_mod_map_layer = [image_overlay]
+            else:
+                # No map for the selected date
+                uk_mod_map_layer = []
+        else:
+            # No date selected
+            uk_mod_map_layer = []
+    else:
+        # Overlay is not checked, clear the layer
+        uk_mod_map_layer = []
+
     # Update the stored overlays
-    return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer, overlays
+    return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer, uk_mod_map_layer, overlays
 
 # Update the table with fire details based on marker click, and mark the selected fire on the map
 @app.callback(
@@ -384,82 +520,123 @@ def update_layers(clickData, overlays, prev_overlays):
     [
         Input({'type': 'fire-marker-significance', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input({'type': 'fire-marker', 'index': dash.dependencies.ALL}, 'n_clicks'),
-        Input('fires-per-day-plot', 'clickData')  # Include clickData as an Input
+        Input({'type': 'fire-cluster-marker', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input('fires-per-day-plot', 'clickData')
     ],
     [
         State('fire-details-table', 'data'),
         State('fire-details-container', 'style'),
-        State('selected-fire-layer', 'children')
+        State('selected-fire-layer', 'children'),
+        State('n-clusters-input', 'value')  # Include the input here
     ],
     prevent_initial_call=True
 )
-def update_fire_details(marker_clicks_significance, marker_clicks, clickData, current_data, current_style, current_selected_fire_marker):
+def update_fire_details(marker_clicks_significance, marker_clicks, cluster_marker_clicks, clickData, current_data, current_style, current_selected_fire_marker, n_clusters):
     ctx = dash.callback_context
 
-    # If no input triggered the callback, do not update
     if not ctx.triggered:
         return no_update, no_update, no_update
 
-    # Get the property ID and value of the triggering input
     triggered_prop_id = ctx.triggered[0]['prop_id']
     triggered_value = ctx.triggered[0]['value']
 
-    # Check if the triggering input is the date change
     if triggered_prop_id == 'fires-per-day-plot.clickData':
-        # The date has changed, reset the outputs
+        # Reset outputs when date changes
         return [], {'display': 'none'}, []
 
-    # Check if the triggering input is a marker click
     elif triggered_prop_id.endswith('.n_clicks') and triggered_value and triggered_value > 0:
-        # Extract marker ID and index
         marker_id_json = triggered_prop_id.split('.')[0]
         marker_id = json.loads(marker_id_json)
         index = marker_id['index']
         marker_type = marker_id['type']
 
-        # Retrieve the corresponding fire data
-        row = fires_gdf.loc[index]
+        # Get the selected date
+        selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+        filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
 
-        # Prepare data for the fire details table
-        data = [{
-            'ACQ_DATE': str(row['ACQ_DATE']),
-            'LATITUDE': row['LATITUDE'],
-            'LONGITUDE': row['LONGITUDE'],
-            'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
-            'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
-        }]
+        if marker_type == 'fire-cluster-marker':
+            # Recompute clustering to get cluster data
+            coords = np.array([[row.geometry.y, row.geometry.x] for idx, row in filtered_data.iterrows()])
+            kmeans = KMeans(n_clusters=n_clusters, random_state=0)
+            kmeans.fit(coords)
+            filtered_data['cluster'] = kmeans.labels_
+            cluster_data = filtered_data[filtered_data['cluster'] == index]
 
-        # Create the selected fire marker
-        selected_fire_marker = dl.CircleMarker(
-            center=[row.geometry.y, row.geometry.x],
-            radius=10,
-            color='#6e57ce',
-            fillColor='#6e57ce',
-            fill=True,
-            fillOpacity=0.8,
-            opacity=1.0,
-            id='selected-fire-marker',
-            children=[
-                dl.Tooltip(
-                    content=(
-                        f"Date: {row['ACQ_DATE']}<br>"
-                        f"Lat: {row['LATITUDE']}<br>"
-                        f"Lon: {row['LONGITUDE']}<br>"
-                        f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%"
-                    ),
-                    direction='auto',
-                    permanent=False,
-                    sticky=False,
-                    interactive=True,
-                    offset=[0, 0],
-                    opacity=0.9,
-                    pane='fire-tooltip-pane',
-                    id=f'selected-fire-tooltip-{marker_id_json}'
-                )
-            ]
-        )
+            # Prepare data
+            data = [{
+                'ACQ_DATE': str(selected_date),
+                'LATITUDE': cluster_data.geometry.y.mean(),
+                'LONGITUDE': cluster_data.geometry.x.mean(),
+                'SIGNIFICANCE_SCORE_DECAY': f"{round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%",
+                'FIRE_TYPE': f"Cluster of {len(cluster_data)} fires"
+            }]
 
-        # Define the style for the fire details container
+            # Create selected cluster marker
+            selected_fire_marker = dl.CircleMarker(
+                center=[cluster_data.geometry.y.mean(), cluster_data.geometry.x.mean()],
+                radius=get_marker_size(len(cluster_data)),
+                color='#6e57ce',
+                fillColor='#6e57ce',
+                fill=True,
+                fillOpacity=0.8,
+                opacity=1.0,
+                id='selected-fire-marker',
+                children=[
+                    dl.Tooltip(
+                        content=(
+                            f"Cluster of {len(cluster_data)} fires<br>"
+                            f"Mean Significance: {round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%"
+                        ),
+                        direction='auto',
+                        permanent=False,
+                        sticky=False,
+                        interactive=True,
+                        offset=[0, 0],
+                        opacity=0.9,
+                        pane='fire-tooltip-pane',
+                        id=f'selected-fire-tooltip-{marker_id_json}'
+                    )
+                ]
+            )
+        else:
+            # Handle individual fire marker clicks
+            row = fires_gdf.loc[index]
+            data = [{
+                'ACQ_DATE': str(row['ACQ_DATE']),
+                'LATITUDE': row['LATITUDE'],
+                'LONGITUDE': row['LONGITUDE'],
+                'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
+                'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related"
+            }]
+            selected_fire_marker = dl.CircleMarker(
+                center=[row.geometry.y, row.geometry.x],
+                radius=10,
+                color='#6e57ce',
+                fillColor='#6e57ce',
+                fill=True,
+                fillOpacity=0.8,
+                opacity=1.0,
+                id='selected-fire-marker',
+                children=[
+                    dl.Tooltip(
+                        content=(
+                            f"Date: {row['ACQ_DATE']}<br>"
+                            f"Lat: {row['LATITUDE']}<br>"
+                            f"Lon: {row['LONGITUDE']}<br>"
+                            f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%"
+                        ),
+                        direction='auto',
+                        permanent=False,
+                        sticky=False,
+                        interactive=True,
+                        offset=[0, 0],
+                        opacity=0.9,
+                        pane='fire-tooltip-pane',
+                        id=f'selected-fire-tooltip-{marker_id_json}'
+                    )
+                ]
+            )
+
         style = {
             "position": "absolute",
             "top": "10px",
@@ -473,12 +650,11 @@ def update_fire_details(marker_clicks_significance, marker_clicks, clickData, cu
             "border": "1px solid #cccccc"
         }
 
-        # Return updated outputs
         return data, style, [selected_fire_marker]
 
     else:
-        # Not triggered by a marker click or date change; do not update outputs
         return no_update, no_update, no_update
+
 
 # Plot the number of fire events per day
 @app.callback(
