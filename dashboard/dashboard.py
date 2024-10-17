@@ -129,6 +129,7 @@ app.layout = html.Div([
                     min=1,
                     max=500,  # Adjust max as needed
                     value=500,  # Default value
+                    debounce=True, # Debounce input to prevent rapid updates
                     style={
                         "width": "60px",
                         "display": "inline-block",
@@ -484,6 +485,19 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
                     uk_mod_map_layer = []
             else:
                 uk_mod_map_layer = []
+    elif triggered_input == 'n-clusters-input':
+    # Handle changes to the cluster size input
+        if clickData:
+            selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+            # Update the selected date string
+            num_fires = len(fires_gdf[fires_gdf['ACQ_DATE'] == selected_date])
+            selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}, Number of Abnormal Fires: {num_fires}"
+            # Filter data based on the selected date
+            filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+            # Determine if 'Use Significance for Opacity' is in overlays
+            use_significance_opacity = 'Use Significance for Opacity' in overlays
+            # Generate fire markers with the new cluster size
+            fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters)
     else:
         pass  # Other triggers
 
@@ -527,18 +541,18 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
     [
         Input({'type': 'fire-marker', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
         Input({'type': 'fire-cluster-marker', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
-        Input('fires-per-day-plot', 'clickData')
+        Input('fires-per-day-plot', 'clickData'),
+        Input('n-clusters-input', 'value')
     ],
     [
         State('fire-details-table', 'data'),
         State('fire-details-container', 'style'),
         State('selected-fire-layer', 'children'),
-        State('n-clusters-input', 'value')  # Include the input here
     ],
     prevent_initial_call=True
 )
-def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, current_data, 
-                        current_style, current_selected_fire_marker, n_clusters):
+def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clusters,
+                        current_data, current_style, current_selected_fire_marker):
     ctx = dash.callback_context
 
     if not ctx.triggered:
@@ -549,6 +563,10 @@ def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, current
 
     if triggered_prop_id == 'fires-per-day-plot.clickData':
         # Reset outputs when date changes
+        return [], {'display': 'none'}, []
+    
+    elif triggered_prop_id == 'n-clusters-input.value':
+        # Reset outputs when cluster size changes
         return [], {'display': 'none'}, []
 
     elif triggered_prop_id.endswith('.n_clicks') and triggered_value and triggered_value > 0:
