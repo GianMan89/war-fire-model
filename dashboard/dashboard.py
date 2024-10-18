@@ -30,13 +30,16 @@ from src.preprocessing.load_data import DataLoader
 
 # Load data
 fires_data = pd.read_csv('results/50km/test_predictions.csv')
-fires_data = fires_data[fires_data['ABNORMAL_LABEL_DECAY'] == 1]
 
 # Convert ACQ_DATE to datetime.date format for date picker compatibility
 fires_data['ACQ_DATE'] = pd.to_datetime(fires_data['ACQ_DATE']).dt.date
 
 # Create a GeoDataFrame from the fires data
 fires_gdf = gpd.GeoDataFrame(fires_data, geometry=gpd.points_from_xy(fires_data.LONGITUDE, fires_data.LATITUDE))
+
+# Separate abnormal and normal fires
+abnormal_fires_gdf = fires_gdf[fires_gdf['ABNORMAL_LABEL_DECAY'] == 1].reset_index(drop=True)
+normal_fires_gdf = fires_gdf[fires_gdf['ABNORMAL_LABEL_DECAY'] == 0].reset_index(drop=True)
 
 # Load Ukraine borders
 ukraine_borders = gpd.read_file('data/ukr_borders/ukr_borders.shp')
@@ -92,6 +95,12 @@ app.layout = html.Div([
                 dl.LayerGroup(id='uk-mod-map-layer', children=[]),
                 name='UK MOD Map',
                 checked=False
+            ),
+            dl.Overlay(
+                dl.Pane(dl.LayerGroup(id='normal-fire-layer', children=[]), 
+                        name='normal-fire-pane', style=dict(zIndex=499)),
+                name='Normal Fires',
+                checked=False  # Default is invisible
             ),
         ]),
         dl.Pane(dl.LayerGroup(id='fire-layer', children=[]), name='fire-pane', style=dict(zIndex=500)),
@@ -214,26 +223,30 @@ def get_marker_size(num_fires):
     size = base_size + np.log1p(num_fires) * 2  # Logarithmic scaling
     return size
 
-def generate_fire_markers_without_clustering(data, use_significance_opacity):
+def generate_fire_markers_without_clustering(data, use_significance_opacity, fire_type='abnormal'):
     markers = []
     for _, row in data.iterrows():
+        significance = row['SIGNIFICANCE_SCORE_DECAY']
+        if fire_type == 'normal':
+            significance *= -1  # Multiply by -1 for normal fires
+        color = '#cc0000' if fire_type == 'abnormal' else '#808080'  # Red for abnormal, grey for normal
         markers.append(dl.CircleMarker(
             center=[row.geometry.y, row.geometry.x],
             radius=8,
-            color='#cc0000',
-            fillColor='#cc0000',
+            color=color,
+            fillColor=color,
             fill=True,
-            fillOpacity=row['SIGNIFICANCE_SCORE_DECAY'] if use_significance_opacity else 0.5,
+            fillOpacity=significance if use_significance_opacity else 0.5,
             opacity=0.0 if use_significance_opacity else 1.0,
-            id={'type': 'fire-marker', 'index': row.name, 'significance_opt': use_significance_opacity},
+            id={'type': f'fire-marker-{fire_type}', 'index': row.name, 'significance_opt': use_significance_opacity},
             n_clicks=0,
             interactive=True,
             children=[dl.Tooltip(
-                content=f"Single fire<br>"
+                content=f"Single {'war-related' if fire_type == 'abnormal' else 'non war-related'} fire<br>"
                         f"Date: {row['ACQ_DATE']}<br>"
                         f"Lat: {round(row['LATITUDE'], 4)}<br>"
                         f"Lon: {round(row['LONGITUDE'], 4)}<br>"
-                        f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
+                        f"Significance: {round(significance * 100, 2)}%",
                 direction='auto', permanent=False, sticky=False, interactive=True, offset=[0, 0], opacity=0.9,
                 pane='fire-tooltip-pane',
             )]
@@ -241,10 +254,10 @@ def generate_fire_markers_without_clustering(data, use_significance_opacity):
     return markers
 
 # Fire markers colored by their label
-def generate_fire_markers(data, use_significance_opacity, n_clusters):
+def generate_fire_markers(data, use_significance_opacity, n_clusters, fire_type='abnormal'):
     # If the number of fires is less than or equal to n_clusters, skip clustering
     if len(data) <= n_clusters or n_clusters <= 1:
-        return generate_fire_markers_without_clustering(data, use_significance_opacity)
+        return generate_fire_markers_without_clustering(data, use_significance_opacity, fire_type)
     
     # Prepare data for clustering
     coords = np.array([[row.geometry.y, row.geometry.x] for idx, row in data.iterrows()])
@@ -263,28 +276,34 @@ def generate_fire_markers(data, use_significance_opacity, n_clusters):
         
         # Mean significance score
         mean_significance = cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean()
+
+        # Adjust mean_significance for normal fires
+        if fire_type == 'normal':
+            mean_significance *= -1  # Multiply by -1 for normal fires
         
         # Number of fires in the cluster
         num_fires = len(cluster_data)
         
         # Determine marker size based on the number of fires
         marker_size = get_marker_size(num_fires)
+
+        color = '#cc0000' if fire_type == 'abnormal' else '#808080'  # Red for abnormal, grey for normal
         
         # Create cluster marker
         marker = dl.CircleMarker(
             center=[cluster_center_lat, cluster_center_lon],
             radius=marker_size,
-            color='#cc0000',
-            fillColor='#cc0000',
+            color=color,
+            fillColor=color,
             fill=True,
             fillOpacity=mean_significance if use_significance_opacity else 0.5,
             opacity=0.0 if use_significance_opacity else 1.0,
-            id={'type': 'fire-cluster-marker', 'index': int(cluster_label), 'significance_opt': use_significance_opacity},
+            id={'type': f'fire-cluster-marker-{fire_type}', 'index': int(cluster_label), 'significance_opt': use_significance_opacity},
             n_clicks=0,
             interactive=True,
             children=[dl.Tooltip(
                 content=(
-                    [f"Cluster of {num_fires} fires<br>" if num_fires > 1 else "Single fire<br>"][0] +
+                    [f"Cluster of {num_fires} {'war-related' if fire_type == 'abnormal' else 'non war-related'} fires<br>" if num_fires > 1 else f"Single {'war-related' if fire_type == 'abnormal' else 'non war-related'} fire<br>"][0] +
                     f"Date: {cluster_data['ACQ_DATE'].iloc[0]}<br>"
                     f"Lat: {round(cluster_center_lat, 4)}<br>"
                     f"Lon: {round(cluster_center_lon, 4)}<br>"
@@ -359,8 +378,9 @@ def generate_ukraine_temp_layer(selected_date):
         Output('selected-date', 'children'),
         Output('ukraine-cloud-layer', 'children'),
         Output('ukraine-temp-layer', 'children'),
-        Output('uk-mod-map-layer', 'children'),  # New output
-        Output('overlays-store', 'data')
+        Output('uk-mod-map-layer', 'children'),
+        Output('overlays-store', 'data'),
+        Output('normal-fire-layer', 'children')
     ],
     [
         Input('fires-per-day-plot', 'clickData'),
@@ -378,11 +398,11 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
 
     # If no date is selected, do not update the map and print a message
     if not clickData:
-        return dash.no_update, "Select a date from the plot.", dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, "Select a date from the plot.", dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
     
     ctx = dash.callback_context
     if not ctx.triggered:
-        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
     # Initialize outputs
     fire_markers = dash.no_update
@@ -390,6 +410,7 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
     ukraine_cloud_layer = dash.no_update
     ukraine_temp_layer = dash.no_update
     uk_mod_map_layer = dash.no_update
+    normal_fire_markers = dash.no_update
 
     # Initialize prev_overlays if None
     if prev_overlays is None:
@@ -410,19 +431,32 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
     temp_layer_toggled = 'Ukraine Mean Temperature' in added_overlays or 'Ukraine Mean Temperature' in removed_overlays
     # Determine if 'UK MOD Map' overlay is toggled
     uk_mod_map_toggled = 'UK MOD Map' in added_overlays or 'UK MOD Map' in removed_overlays
+    # Determine if 'Normal Fires' is in overlays
+    normal_fires_visible = 'Normal Fires' in overlays
+    normal_fires_toggled = 'Normal Fires' in added_overlays or 'Normal Fires' in removed_overlays
 
     # Handle clickData changes
     if triggered_input == 'fires-per-day-plot':
         if not clickData:
-            return [], "Select a date from the plot.", [], [], overlays
+            return [], "Select a date from the plot.", [], [], overlays, []
         selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
-        selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}, Number of Abnormal Fires: {len(fires_gdf[fires_gdf['ACQ_DATE'] == selected_date])}"
+        num_abnormal_fires = len(abnormal_fires_gdf[abnormal_fires_gdf['ACQ_DATE'] == selected_date])
+        num_normal_fires = len(normal_fires_gdf[normal_fires_gdf['ACQ_DATE'] == selected_date])
+        selected_date_str = (
+            f"Selected Date: {selected_date.strftime('%d-%m-%Y')}, "
+            f"Number of Abnormal Fires: {num_abnormal_fires}, "
+            f"Number of Normal Fires: {num_normal_fires}"
+        )
         # Filter data based on the selected date
-        filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+        filtered_data = abnormal_fires_gdf[abnormal_fires_gdf['ACQ_DATE'] == selected_date]
         # Determine if 'Use Significance for Opacity' is in overlays
         use_significance_opacity = 'Use Significance for Opacity' in overlays
         # Generate fire markers
-        fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters)
+        fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters, fire_type='abnormal')
+        # create markers for normal fires
+        if normal_fires_visible:
+            filtered_data_normal = normal_fires_gdf[normal_fires_gdf['ACQ_DATE'] == selected_date]
+            normal_fire_markers = generate_fire_markers(filtered_data_normal, use_significance_opacity, n_clusters, fire_type='normal')
         # Update other layers
         ukraine_cloud_layer = generate_ukraine_cloud_layer(selected_date)
         ukraine_temp_layer = generate_ukraine_temp_layer(selected_date)
@@ -448,11 +482,14 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
             if clickData:
                 selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
                 # Filter data based on the selected date
-                filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+                filtered_data = abnormal_fires_gdf[abnormal_fires_gdf['ACQ_DATE'] == selected_date]
                 # Determine if 'Use Significance for Opacity' is in overlays
                 use_significance_opacity = 'Use Significance for Opacity' in overlays
                 # Generate fire markers
-                fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters)
+                fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters, fire_type='abnormal')
+                if normal_fires_visible:
+                    filtered_data_normal = normal_fires_gdf[normal_fires_gdf['ACQ_DATE'] == selected_date]
+                    normal_fire_markers = generate_fire_markers(filtered_data_normal, use_significance_opacity, n_clusters, fire_type='normal')
             else:
                 # No date selected, cannot update fire markers
                 pass
@@ -485,19 +522,33 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
                     uk_mod_map_layer = []
             else:
                 uk_mod_map_layer = []
+        # Generate normal fire markers if the overlay is checked
+        if normal_fires_toggled:
+            if normal_fires_visible and clickData:
+                selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
+                filtered_data_normal = normal_fires_gdf[normal_fires_gdf['ACQ_DATE'] == selected_date]
+                use_significance_opacity = 'Use Significance for Opacity' in overlays
+                normal_fire_markers = generate_fire_markers(filtered_data_normal, use_significance_opacity, n_clusters, fire_type='normal')
     elif triggered_input == 'n-clusters-input':
     # Handle changes to the cluster size input
         if clickData:
             selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
-            # Update the selected date string
-            num_fires = len(fires_gdf[fires_gdf['ACQ_DATE'] == selected_date])
-            selected_date_str = f"Selected Date: {selected_date.strftime('%d-%m-%Y')}, Number of Abnormal Fires: {num_fires}"
+            num_abnormal_fires = len(abnormal_fires_gdf[abnormal_fires_gdf['ACQ_DATE'] == selected_date])
+            num_normal_fires = len(normal_fires_gdf[normal_fires_gdf['ACQ_DATE'] == selected_date])
+            selected_date_str = (
+                f"Selected Date: {selected_date.strftime('%d-%m-%Y')}, "
+                f"Number of Abnormal Fires: {num_abnormal_fires}, "
+                f"Number of Normal Fires: {num_normal_fires}"
+            )
             # Filter data based on the selected date
-            filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+            filtered_data = abnormal_fires_gdf[abnormal_fires_gdf['ACQ_DATE'] == selected_date]
             # Determine if 'Use Significance for Opacity' is in overlays
             use_significance_opacity = 'Use Significance for Opacity' in overlays
             # Generate fire markers with the new cluster size
-            fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters)
+            fire_markers = generate_fire_markers(filtered_data, use_significance_opacity, n_clusters, fire_type='abnormal')
+            if normal_fires_visible:
+                filtered_data_normal = normal_fires_gdf[normal_fires_gdf['ACQ_DATE'] == selected_date]
+                normal_fire_markers = generate_fire_markers(filtered_data_normal, use_significance_opacity, n_clusters, fire_type='normal')
     else:
         pass  # Other triggers
 
@@ -529,7 +580,7 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
         uk_mod_map_layer = []
 
     # Update the stored overlays
-    return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer, uk_mod_map_layer, overlays
+    return fire_markers, selected_date_str, ukraine_cloud_layer, ukraine_temp_layer, uk_mod_map_layer, overlays, normal_fire_markers
 
 # Update the table with fire details based on marker click, and mark the selected fire on the map
 @app.callback(
@@ -539,8 +590,10 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
         Output('selected-fire-layer', 'children')
     ],
     [
-        Input({'type': 'fire-marker', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
-        Input({'type': 'fire-cluster-marker', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'fire-marker-abnormal', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'fire-cluster-marker-abnormal', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'fire-marker-normal', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'fire-cluster-marker-normal', 'index': dash.dependencies.ALL, 'significance_opt': dash.dependencies.ALL}, 'n_clicks'),
         Input('fires-per-day-plot', 'clickData'),
         Input('n-clusters-input', 'value')
     ],
@@ -551,8 +604,10 @@ def update_layers(clickData, overlays, n_clusters, prev_overlays):
     ],
     prevent_initial_call=True
 )
-def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clusters,
-                        current_data, current_style, current_selected_fire_marker):
+def update_fire_details(abnormal_marker_clicks, abnormal_cluster_clicks,
+                        normal_marker_clicks, normal_cluster_clicks,
+                        clickData, n_clusters, current_data, current_style, 
+                        current_selected_fire_marker):
     ctx = dash.callback_context
 
     if not ctx.triggered:
@@ -574,12 +629,20 @@ def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clust
         marker_id = json.loads(marker_id_json)
         index = marker_id['index']
         marker_type = marker_id['type']
+        # Determine fire type
+        if 'abnormal' in marker_type:
+            fire_type = 'abnormal'
+        else:
+            fire_type = 'normal'
 
         # Get the selected date
         selected_date = pd.to_datetime(clickData['points'][0]['x']).date()
-        filtered_data = fires_gdf[fires_gdf['ACQ_DATE'] == selected_date]
+        if fire_type == 'abnormal':
+            filtered_data = abnormal_fires_gdf[abnormal_fires_gdf['ACQ_DATE'] == selected_date]
+        else:
+            filtered_data = normal_fires_gdf[normal_fires_gdf['ACQ_DATE'] == selected_date]
 
-        if marker_type == 'fire-cluster-marker':
+        if 'fire-cluster-marker' in marker_type:
             # Recompute clustering to get cluster data
             coords = np.array([[row.geometry.y, row.geometry.x] for idx, row in filtered_data.iterrows()])
             kmeans = KMeans(n_clusters=n_clusters, random_state=0)
@@ -588,12 +651,15 @@ def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clust
             cluster_data = filtered_data[filtered_data['cluster'] == index]
 
             # Prepare data
+            mean_significance = cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean()
+            if fire_type == 'normal':
+                mean_significance *= -1
             data = [{
                 'ACQ_DATE': str(selected_date),
                 'LATITUDE': round(cluster_data.geometry.y.mean(), 4),
                 'LONGITUDE': round(cluster_data.geometry.x.mean(), 4),
-                'SIGNIFICANCE_SCORE_DECAY': f"{round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%",
-                'FIRE_TYPE': "War-related", # if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related",
+                'SIGNIFICANCE_SCORE_DECAY': f"{round(mean_significance * 100, 2)}%",
+                'FIRE_TYPE': "War-related" if fire_type == "abnormal" else "Non war-related",
                 'CLUSTER_SIZE': f"Cluster of {len(cluster_data)} fires" if len(cluster_data) > 1 else "Single fire"
             }]
 
@@ -610,11 +676,11 @@ def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clust
                 children=[
                     dl.Tooltip(
                         content=(
-                            [f"Cluster of {len(cluster_data)} fires<br>" if len(cluster_data) > 1 else "Single fire<br>"][0] +
+                            [f"Cluster of {len(cluster_data)} {'war-related' if fire_type == 'abnormal' else 'non war-related'} fires<br>" if len(cluster_data) > 1 else f"Single {'war-related' if fire_type == 'abnormal' else 'non war-related'} fire<br>"][0] +
                             f"Date: {data[0]['ACQ_DATE']}<br>" +
                             f"Lat: {round(cluster_data.geometry.y.mean(), 4)}<br>" +
                             f"Lon: {round(cluster_data.geometry.x.mean(), 4)}<br>" +
-                            [f"{["Mean Significance" if len(cluster_data) > 1 else "Significance"][0]}: {round(cluster_data['SIGNIFICANCE_SCORE_DECAY'].mean() * 100, 2)}%"][0]
+                            [f"{["Mean Significance" if len(cluster_data) > 1 else "Significance"][0]}: {round(mean_significance * 100, 2)}%"][0]
                         ),
                         direction='auto',
                         permanent=False,
@@ -629,13 +695,16 @@ def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clust
             )
         else:
             # Handle individual fire marker clicks
-            row = fires_gdf.loc[index]
+            row = filtered_data.loc[index]
+            significance = row['SIGNIFICANCE_SCORE_DECAY']
+            if fire_type == 'normal':
+                significance *= -1
             data = [{
                 'ACQ_DATE': str(row['ACQ_DATE']),
                 'LATITUDE': round(row['LATITUDE'], 4),
                 'LONGITUDE': round(row['LONGITUDE'], 4),
-                'SIGNIFICANCE_SCORE_DECAY': f"{round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%",
-                'FIRE_TYPE': "War-related" if row['ABNORMAL_LABEL_DECAY'] == 1 else "Non war-related",
+                'SIGNIFICANCE_SCORE_DECAY': f"{round(significance * 100, 2)}%",
+                'FIRE_TYPE': "War-related" if fire_type == "abnormal" else "Non war-related",
                 'CLUSTER_SIZE': "Single fire"
             }]
             selected_fire_marker = dl.CircleMarker(
@@ -650,11 +719,11 @@ def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clust
                 children=[
                     dl.Tooltip(
                         content=(
-                            f"Single fire<br>"
+                            f"Single {'war-related' if fire_type == 'abnormal' else 'non war-related'} fire<br>"
                             f"Date: {row['ACQ_DATE']}<br>"
                             f"Lat: {round(row['LATITUDE'], 4)}<br>"
                             f"Lon: {round(row['LONGITUDE'], 4)}<br>"
-                            f"Significance: {round(row['SIGNIFICANCE_SCORE_DECAY'] * 100, 2)}%"
+                            f"Significance: {round(significance * 100, 2)}%"
                         ),
                         direction='auto',
                         permanent=False,
@@ -693,7 +762,7 @@ def update_fire_details(marker_clicks, cluster_marker_clicks, clickData, n_clust
     [Input('fires-per-day-plot', 'clickData')]
 )
 def update_fires_per_day_plot(clickData):
-    daily_fire_counts = fires_gdf['ACQ_DATE'].value_counts().sort_index()
+    daily_fire_counts = abnormal_fires_gdf['ACQ_DATE'].value_counts().sort_index()
     # Ensure all dates within the range have a count, filling missing dates with zero
     all_dates = pd.date_range(start=min_date, end=max_date)
     daily_fire_counts = daily_fire_counts.reindex(all_dates, fill_value=0)
